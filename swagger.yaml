@@ -1,0 +1,928 @@
+openapi: 3.0.3
+info:
+  title: Balnus Backend API
+  version: 1.0.0
+  description: OpenAPI specification for the Balnus health, authentication, team, project, comment, and activity endpoints.
+servers:
+  - url: https://balnus-backend.onrender.com
+    description: Render deployment
+  - url: http://localhost:8000
+    description: Local development server
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Team
+  - name: Project
+  - name: Comments
+  - name: Project Activity
+paths:
+  /api/healthCheck:
+    get:
+      tags: [Health]
+      summary: Check API health
+      responses:
+        '200':
+          description: API is responding.
+          content:
+            text/html:
+              schema:
+                type: string
+              example: data
+  /api/swagger:
+    get:
+      tags: [Health]
+      summary: Open interactive API documentation
+      description: Displays the Swagger UI for this API.
+      responses:
+        '200':
+          description: Swagger UI page returned.
+          content:
+            text/html:
+              schema:
+                type: string
+        '500':
+          description: Swagger UI could not be rendered.
+  /api/v1/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a customer
+      description: Creates an active employee account. userType is required and must be admin or employee; public registration cannot create admin accounts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Customer registered; an access and refresh token were issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Request fields failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '409':
+          description: Username, emailaddress, or phonenumber already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '403':
+          description: Admin accounts must be created through a trusted administrative process.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login succeeded; an access and refresh token were issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Emailaddress or password is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: The customer account is inactive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate the refresh token
+      description: Revokes the presented refresh token and returns a new token pair.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Refresh succeeded; the previous refresh token is revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Refresh token is missing, invalid, expired, or already used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Log out the current session
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current session revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Logged out successfully
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/team:
+    get:
+      tags: [Team]
+      summary: List teams
+      description: Admin access is required.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Teams ordered by teamName.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Team'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+    post:
+      tags: [Team]
+      summary: Create a team
+      description: Admin access is required. Team names are unique without regard to letter case.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInput'
+      responses:
+        '201':
+          description: Team created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          description: Invalid request fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Admin access is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '409':
+          description: A team with this name already exists, ignoring case.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+  /api/v1/team/{teamId}:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+    get:
+      tags: [Team]
+      summary: Get a team by ID
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Team found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          description: Invalid team ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '404':
+          description: Team not found.
+    put:
+      tags: [Team]
+      summary: Replace a team
+      description: Admin access is required. Both teamName and isActive are mandatory.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInput'
+      responses:
+        '200':
+          description: Team updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          description: Invalid team ID or request fields.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Team not found.
+        '409':
+          description: Another team already uses this name, ignoring case.
+    delete:
+      tags: [Team]
+      summary: Delete a team
+      description: Admin access is required. This permanently deletes the team.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Team deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Invalid team ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Team not found.
+  /api/v1/project:
+    get:
+      tags: [Project]
+      summary: List projects
+      description: Admin access is required. Returns the project fields used by the project list.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Projects ordered by generated projectID. Each item includes a nested team object with its _id and teamName.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectListItem'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+    post:
+      tags: [Project]
+      summary: Create a project
+      description: Admin access is required. projectID is generated by the server. projectName is unique without regard to letter case.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectInput'
+      responses:
+        '201':
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Invalid fields or references.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '409':
+          description: A project with this name already exists, ignoring case.
+  /api/v1/project/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+    get:
+      tags: [Project]
+      summary: Get a project by MongoDB _id
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Project found with its team _id and teamName nested under team.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetails'
+        '400':
+          description: Invalid project ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Project not found.
+    put:
+      tags: [Project]
+      summary: Edit a project
+      description: Admin access is required. projectID is immutable and generated by the server.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectInput'
+      responses:
+        '200':
+          description: Project updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Invalid project ID, fields, or references.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Project not found.
+        '409':
+          description: Another project already uses this name, ignoring case.
+    delete:
+      tags: [Project]
+      summary: Delete a project
+      description: Admin access is required. This permanently deletes the project.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Project deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Project deleted successfully
+        '400':
+          description: Invalid project ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Project not found.
+  /api/v1/project/{projectId}/comments:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: MongoDB project _id or generated projectID such as PRJ-1001.
+        schema:
+          type: string
+    get:
+      tags: [Comments]
+      summary: List comments for a project
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Comments with author ID and name under employeeDetails.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectComment'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin or employee access is required.
+        '404':
+          description: Project not found.
+    post:
+      tags: [Comments]
+      summary: Add a comment to a project
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCommentInput'
+      responses:
+        '201':
+          description: Comment created. Author ID is taken from the access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectComment'
+        '400':
+          description: Invalid comment payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin or employee access is required.
+        '404':
+          description: Project not found.
+  /api/v1/project/{projectId}/comments/{commentId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: MongoDB project _id or generated projectID such as PRJ-1001.
+        schema:
+          type: string
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+    put:
+      tags: [Comments]
+      summary: Update a project comment
+      description: Only the authenticated user who created the comment can update it.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCommentInput'
+      responses:
+        '200':
+          description: Comment updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectComment'
+        '400':
+          description: Invalid comment or ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin or employee access is required.
+        '404':
+          description: Project or comment not found.
+    delete:
+      tags: [Comments]
+      summary: Delete a project comment
+      description: Only the authenticated user who created the comment can delete it.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Comment deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Comment deleted successfully
+        '400':
+          description: Invalid comment ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin or employee access is required.
+        '404':
+          description: Project or comment not found.
+  /api/v1/project/{projectId}/activities:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: MongoDB project _id or generated projectID such as PRJ-1001.
+        schema:
+          type: string
+    get:
+      tags: [Project Activity]
+      summary: List project activity history
+      description: Admin access only. Includes project create, edit, delete, and comment add, edit, and delete events.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Activity history sorted newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectActivity'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Project not found.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ProjectActivity:
+      type: object
+      required: [_id, projectId, projectID, actorRole, action, message, changedFields, actorDetails, createdAt]
+      properties:
+        _id:
+          type: string
+        projectId:
+          type: string
+          description: MongoDB _id of the project.
+        projectID:
+          type: string
+          example: PRJ-1001
+        actorRole:
+          type: string
+          enum: [admin, employee]
+        action:
+          type: string
+          enum: [PROJECT_CREATED, PROJECT_UPDATED, PROJECT_DELETED, COMMENT_ADDED, COMMENT_UPDATED, COMMENT_DELETED]
+        message:
+          type: string
+        changedFields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectFieldChange'
+        commentText:
+          type: string
+        actorDetails:
+          type: object
+          nullable: true
+          properties:
+            actorId:
+              type: string
+            actorName:
+              type: string
+            role:
+              type: string
+              enum: [admin, employee]
+        createdAt:
+          type: string
+          format: date-time
+    ProjectFieldChange:
+      type: object
+      required: [field]
+      properties:
+        field:
+          type: string
+        previousValue: {}
+        newValue: {}
+    ProjectCommentInput:
+      type: object
+      additionalProperties: false
+      required: [comments]
+      properties:
+        comments:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          example: Initial requirements review is complete.
+    ProjectComment:
+      type: object
+      required: [_id, projectId, comments, employeeDetails, createdAt, updatedAt]
+      properties:
+        _id:
+          type: string
+        projectId:
+          type: string
+          description: MongoDB _id of the project.
+        comments:
+          type: string
+        employeeDetails:
+          type: object
+          required: [employeeId, employeeName]
+          properties:
+            employeeId:
+              type: string
+              description: MongoDB _id of the authenticated author.
+            employeeName:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProjectInput:
+      type: object
+      required: [projectName, projectOwner, teamId]
+      properties:
+        projectName:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: Customer Portal
+        clientName:
+          type: string
+          maxLength: 150
+        projectOwner:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Project owner name or label.
+        department:
+          type: string
+          maxLength: 100
+        teamId:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+          description: MongoDB _id of an active team.
+        startDate:
+          type: string
+          format: date-time
+        expectedEndDate:
+          type: string
+          format: date-time
+        assignedEmployees:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+          description: MongoDB IDs of active employee accounts.
+        status:
+          type: string
+          enum: [Upcoming, InProgress, Completed, OnHold]
+          default: Upcoming
+        description:
+          type: string
+          maxLength: 5000
+    Project:
+      allOf:
+        - $ref: '#/components/schemas/ProjectInput'
+        - type: object
+          required: [projectID, createdAt, updatedAt]
+          properties:
+            projectID:
+              type: string
+              readOnly: true
+              example: PRJ-1001
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    ProjectListItem:
+      type: object
+      required: [_id, projectID, projectName, projectOwner, team, status]
+      properties:
+        _id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        projectID:
+          type: string
+          example: PRJ-1001
+        projectName:
+          type: string
+        clientName:
+          type: string
+        projectOwner:
+          type: string
+        team:
+          $ref: '#/components/schemas/TeamReference'
+        startDate:
+          type: string
+          format: date-time
+        expectedEndDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [Upcoming, InProgress, Completed, OnHold]
+    ProjectDetails:
+      type: object
+      required: [_id, projectID, projectName, projectOwner, team, assignedEmployees, status, createdAt, updatedAt]
+      properties:
+        _id:
+          type: string
+        projectID:
+          type: string
+        projectName:
+          type: string
+        clientName:
+          type: string
+        projectOwner:
+          type: string
+        department:
+          type: string
+        team:
+          $ref: '#/components/schemas/TeamReference'
+        startDate:
+          type: string
+          format: date-time
+        expectedEndDate:
+          type: string
+          format: date-time
+        assignedEmployees:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [Upcoming, InProgress, Completed, OnHold]
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TeamReference:
+      type: object
+      required: [_id, teamName]
+      properties:
+        _id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        teamName:
+          type: string
+    TeamInput:
+      type: object
+      required: [teamName, isActive]
+      properties:
+        teamName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Platform Engineering
+        isActive:
+          type: boolean
+          example: true
+    Team:
+      allOf:
+        - $ref: '#/components/schemas/TeamInput'
+        - type: object
+          required: [_id, createdAt, updatedAt]
+          properties:
+            _id:
+              type: string
+              example: 665f2d4e3b30ca7bd064d912
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    RegisterRequest:
+      type: object
+      required: [username, firstname, lastname, phonenumber, emailaddress, password, userType]
+      properties:
+        username:
+          type: string
+          minLength: 7
+          maxLength: 30
+          pattern: '^[A-Za-z0-9]{7,30}$'
+          example: employee01
+        firstname:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[A-Za-z]{1,50}$'
+          example: Alex
+        lastname:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[A-Za-z]{1,50}$'
+          example: Kumar
+        phonenumber:
+          type: string
+          minLength: 1
+          maxLength: 10
+          pattern: '^\d{1,10}$'
+          description: Send as a string to preserve leading zeroes.
+          example: '0123456789'
+        emailaddress:
+          type: string
+          format: email
+          pattern: '^[A-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*\.com$'
+          example: alex@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          format: password
+          writeOnly: true
+        userType:
+          type: string
+          enum: [admin, employee]
+          description: Public registration must use employee. Admin accounts require trusted administrative provisioning.
+          example: employee
+    LoginRequest:
+      type: object
+      required: [emailaddress, password]
+      properties:
+        emailaddress:
+          type: string
+          format: email
+          example: alex@example.com
+        password:
+          type: string
+          format: password
+          writeOnly: true
+    RefreshRequest:
+      type: object
+      required: [refreshtoken]
+      properties:
+        refreshtoken:
+          type: string
+          description: Current refresh token. It is revoked after successful use.
+    TokenResponse:
+      type: object
+      required: [token, refreshtoken, expiresIn, expiresAt, refreshExpiresAt]
+      properties:
+        token:
+          type: string
+          description: Bearer access token.
+        refreshtoken:
+          type: string
+          description: Refresh token; valid for one day and rotated on use.
+        expiresIn:
+          type: integer
+          description: Access-token lifetime in seconds.
+          example: 1800
+        expiresAt:
+          type: string
+          format: date-time
+        refreshExpiresAt:
+          type: string
+          format: date-time
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Validation failed
+        errors:
+          type: object
+          additionalProperties:
+            type: string
