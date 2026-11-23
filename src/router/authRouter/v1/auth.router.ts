@@ -3,12 +3,12 @@ import { CustomerModel, UserType } from '../../../models/customer.model';
 import { RefreshTokenModel } from '../../../models/refresh-token.model';
 import { authenticate } from '../../../middlewares/authenticate';
 import { HttpError } from '../../../middlewares/error';
-import { ACCESS_TTL_SECONDS_VALUE, createAccessToken, createRefreshToken, hashPassword, hashToken, REFRESH_TTL_MS, verifyPassword } from '../../../utils/auth';
-import { validateLogin, validateRefreshToken, validateRegistration } from '../../../validations/auth.validation';
+import { createAccessToken, createRefreshToken, hashPassword, hashToken, REFRESH_TTL_MS, verifyPassword } from '../../../utils/auth';
+import { validateLogin, validatePasswordChange, validateRefreshToken } from '../../../validations/auth.validation';
 
 const router = Router();
 
-function authResponse(customer: { _id: unknown; userType: UserType }) {
+function authResponse(customer: { _id: unknown; userType: UserType; isPermanentPassword: boolean }) {
   const access = createAccessToken(customer);
   const refreshToken = createRefreshToken();
   const refreshExpiresAt = new Date(Date.now() + REFRESH_TTL_MS);
@@ -26,29 +26,31 @@ async function saveSession(customerId: unknown, accessJti: string, refreshToken:
   });
 }
 
-function sendAuthResponse(res: Response, values: ReturnType<typeof authResponse>, status = 200) {
+async function createFreshSession(customer: { _id: unknown; userType: UserType; isPermanentPassword: boolean }) {
+  const tokens = authResponse(customer);
+  await RefreshTokenModel.updateMany(
+    { customerId: customer._id, revokedAt: null },
+    { $set: { revokedAt: new Date() } },
+  );
+  await saveSession(customer._id, tokens.access.jti, tokens.refreshToken, tokens.access.expiresAt, tokens.refreshExpiresAt);
+  return tokens;
+}
+
+function sendAuthResponse(
+  res: Response,
+  values: ReturnType<typeof authResponse>,
+  status = 200,
+  additionalFields: Record<string, unknown> = {},
+) {
   res.status(status).json({
+    ...additionalFields,
     token: values.access.token,
     refreshtoken: values.refreshToken,
-    expiresIn: ACCESS_TTL_SECONDS_VALUE,
+    expiresIn: values.access.expiresIn,
     expiresAt: values.access.expiresAt,
     refreshExpiresAt: values.refreshExpiresAt,
   });
 }
-
-router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const input = validateRegistration(req.body);
-    if (input.userType === 'admin') {
-      throw new HttpError(403, 'Admin accounts must be created through a trusted administrative process');
-    }
-    const passwordHash = await hashPassword(input.password);
-    const customer = await CustomerModel.create({ ...input, password: passwordHash, isActive: true });
-    const tokens = authResponse(customer);
-    await saveSession(customer._id, tokens.access.jti, tokens.refreshToken, tokens.access.expiresAt, tokens.refreshExpiresAt);
-    sendAuthResponse(res, tokens, 201);
-  } catch (error) { next(error); }
-});
 
 router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -57,8 +59,29 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     const valid = customer ? await verifyPassword(password, customer.password) : false;
     if (!customer || !valid) throw new HttpError(401, 'emailaddress or password is invalid');
     if (!customer.isActive) throw new HttpError(403, 'Account is inactive');
-    const tokens = authResponse(customer);
-    await saveSession(customer._id, tokens.access.jti, tokens.refreshToken, tokens.access.expiresAt, tokens.refreshExpiresAt);
+    if (!customer.isPermanentPassword) {
+      const tokens = await createFreshSession(customer);
+      sendAuthResponse(res, tokens, 200, { message: 'NEW_PASSWORD_REQUIRED', employeeId: customer._id });
+      return;
+    }
+    const tokens = await createFreshSession(customer);
+    sendAuthResponse(res, tokens);
+  } catch (error) { next(error); }
+});
+
+router.put('/password', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { newPassword } = validatePasswordChange(req.body);
+    const auth = res.locals.auth as { customerId: string };
+    const customer = await CustomerModel.findById(auth.customerId).select('+password');
+    if (!customer) throw new HttpError(401, 'Unauthorized');
+    if (!customer.isActive) throw new HttpError(403, 'Account is inactive');
+
+    customer.password = await hashPassword(newPassword);
+    customer.isPermanentPassword = true;
+    await customer.save();
+
+    const tokens = await createFreshSession(customer);
     sendAuthResponse(res, tokens);
   } catch (error) { next(error); }
 });

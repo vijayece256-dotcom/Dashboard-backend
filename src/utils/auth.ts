@@ -3,6 +3,7 @@ import { createHash, createHmac, randomBytes, randomUUID, scrypt as scryptCallba
 const scrypt = (password: string, salt: Buffer, keylen: number, options: { N: number; r: number; p: number }): Promise<Buffer> =>
   new Promise((resolve, reject) => scryptCallback(password, salt, keylen, options, (error, derived) => error ? reject(error) : resolve(derived)));
 const ACCESS_TTL_SECONDS = 30 * 60;
+const TEMPORARY_ACCESS_TTL_SECONDS = 5 * 60;
 export const REFRESH_TTL_MS = 24 * 60 * 60 * 1000;
 export const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
@@ -34,15 +35,16 @@ function base64url(value: string): string {
 
 export interface AccessClaims { sub: string; jti: string; exp: number }
 
-export function createAccessToken(customer: { _id: unknown; userType: string }): { token: string; jti: string; expiresAt: Date } {
+export function createAccessToken(customer: { _id: unknown; userType: string; isPermanentPassword?: boolean }): { token: string; jti: string; expiresAt: Date; expiresIn: number } {
   const now = Math.floor(Date.now() / 1000);
+  const expiresIn = customer.isPermanentPassword ? ACCESS_TTL_SECONDS : TEMPORARY_ACCESS_TTL_SECONDS;
   const jti = randomUUID();
-  const claims = { sub: String(customer._id), jti, userType: customer.userType, iss: 'balnus-api', aud: 'balnus-client', iat: now, exp: now + ACCESS_TTL_SECONDS };
+  const claims = { sub: String(customer._id), jti, userType: customer.userType, iss: 'balnus-api', aud: 'balnus-client', iat: now, exp: now + expiresIn };
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = base64url(JSON.stringify(claims));
   const unsigned = `${header}.${payload}`;
   const signature = createHmac('sha256', accessSecret()).update(unsigned).digest('base64url');
-  return { token: `${unsigned}.${signature}`, jti, expiresAt: new Date((now + ACCESS_TTL_SECONDS) * 1000) };
+  return { token: `${unsigned}.${signature}`, jti, expiresAt: new Date((now + expiresIn) * 1000), expiresIn };
 }
 
 export function verifyAccessToken(token: string): AccessClaims & { userType?: string } {
@@ -60,4 +62,3 @@ export function verifyAccessToken(token: string): AccessClaims & { userType?: st
 }
 
 export function createRefreshToken(): string { return randomBytes(48).toString('base64url'); }
-export const ACCESS_TTL_SECONDS_VALUE = ACCESS_TTL_SECONDS;

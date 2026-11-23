@@ -7,6 +7,7 @@ import Router from './src/router';
 import mongoConfig from './src/config/mongo.config';
 import { errorHandler } from './src/middlewares/error';
 import { TeamModel } from './src/models/team.model';
+import { DesignationModel } from './src/models/designation.model';
 import { ProjectModel } from './src/models/project.model';
 import { ProjectActivityModel } from './src/models/project-activity.model';
 
@@ -26,7 +27,7 @@ async function start(): Promise<void> {
     throw new Error('JWT_ACCESS_SECRET must contain at least 32 bytes');
   }
   await mongoConfig(mongoUri);
-  await Promise.all([TeamModel.init(), ProjectModel.init(), ProjectActivityModel.init()]);
+  await Promise.all([TeamModel.init(), DesignationModel.init(), ProjectModel.init(), ProjectActivityModel.init()]);
   app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
 }
 
