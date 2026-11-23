@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Balnus Backend API
   version: 1.0.0
-  description: OpenAPI specification for the Balnus health, authentication, team, project, comment, and activity endpoints.
+  description: OpenAPI specification for the Balnus health, employee, authentication, team, designation, project, comment, and activity endpoints.
 servers:
   - url: https://balnus-backend.onrender.com
     description: Render deployment
@@ -11,7 +11,9 @@ servers:
 tags:
   - name: Health
   - name: Authentication
+  - name: Employee
   - name: Team
+  - name: Designation
   - name: Project
   - name: Comments
   - name: Project Activity
@@ -42,24 +44,45 @@ paths:
                 type: string
         '500':
           description: Swagger UI could not be rendered.
-  /api/v1/auth/register:
+  /api/v1/employee:
+    get:
+      tags: [Employee]
+      summary: List employees
+      description: Admin access is required. Team and designation IDs are returned as nested objects with their names.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Employee list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmployeeListItem'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
     post:
-      tags: [Authentication]
-      summary: Register a customer
-      description: Creates an active employee account. userType is required and must be admin or employee; public registration cannot create admin accounts.
+      tags: [Employee]
+      summary: Create an employee
+      description: Admin access is required. The team must be active, and the designation must be active and belong to that team.
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
+              $ref: '#/components/schemas/EmployeeRequest'
       responses:
         '201':
-          description: Customer registered; an access and refresh token were issued.
+          description: Employee created.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenResponse'
+                $ref: '#/components/schemas/EmployeeWriteResponse'
         '400':
           description: Request fields failed validation.
           content:
@@ -72,12 +95,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
         '403':
-          description: Admin accounts must be created through a trusted administrative process.
+          description: Admin access is required.
+  /api/v1/employee/{employeeId}:
+    parameters:
+      - name: employeeId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+    put:
+      tags: [Employee]
+      summary: Update an employee
+      description: Admin access is required. Change passwords through PUT /api/v1/auth/password.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeUpdateRequest'
+      responses:
+        '200':
+          description: Employee updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeWriteResponse'
+        '400':
+          description: Invalid employee ID, employee fields, or team/designation reference.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Employee not found.
+        '409':
+          description: Username, emailaddress, or phonenumber already exists.
+    delete:
+      tags: [Employee]
+      summary: Delete an employee
+      description: Admin access is required. This permanently deletes the employee and revokes their active access and refresh tokens.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Employee deleted.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Employee deleted successfully
+        '400':
+          description: Invalid employee ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Employee not found.
   /api/v1/auth/login:
     post:
       tags: [Authentication]
@@ -90,11 +171,13 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Login succeeded; an access and refresh token were issued.
+          description: Access tokens last 5 minutes when isPermanentPassword is false and 30 minutes when it is true. A temporary-password login also returns NEW_PASSWORD_REQUIRED and employeeId. Successful login revokes the customer's previous access and refresh tokens.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/TokenResponse'
+                  - $ref: '#/components/schemas/NewPasswordRequiredResponse'
         '401':
           description: Emailaddress or password is invalid.
           content:
@@ -107,6 +190,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+  /api/v1/auth/password:
+    put:
+      tags: [Authentication]
+      summary: Set or change the customer password
+      description: Requires a bearer access token from login and a new password longer than 8 characters containing an uppercase letter, a number, and a special character. The customer ID is read from the verified token. Updating the password revokes previous access and refresh tokens.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+      responses:
+        '200':
+          description: Password updated; a new token pair was issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request fields or new password does not meet requirements.
+        '401':
+          description: Access token is invalid or expired.
+        '403':
+          description: The account is inactive.
   /api/v1/auth/refresh:
     post:
       tags: [Authentication]
@@ -293,6 +402,127 @@ paths:
           description: Admin access is required.
         '404':
           description: Team not found.
+  /api/v1/team/designation:
+    get:
+      tags: [Designation]
+      summary: List designations
+      description: Admin access is required. Designations are ordered by name.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Designations ordered by name, including the name of each linked team.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DesignationWithTeam'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+  /api/v1/team/{teamId}/designation:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+    post:
+      tags: [Designation]
+      summary: Create a designation for a team
+      description: Admin access is required. The team ID is taken from the path. Names must be unique within a team, ignoring case.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DesignationInput'
+      responses:
+        '201':
+          description: Designation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Designation'
+        '400':
+          description: Invalid team ID or request fields.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Team not found.
+        '409':
+          description: This team already has a designation with this name.
+  /api/v1/team/{teamId}/designation/{designationId}:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+      - name: designationId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+    put:
+      tags: [Designation]
+      summary: Replace a team's designation
+      description: Admin access is required. Both name and isActive are mandatory. The designation is assigned to the team in the path; its teamId is updated.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DesignationInput'
+      responses:
+        '200':
+          description: Designation updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Designation'
+        '400':
+          description: Invalid team ID, designation ID, or request fields.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Team or designation not found.
+        '409':
+          description: This team already has a designation with this name.
+    delete:
+      tags: [Designation]
+      summary: Delete a team's designation
+      description: Admin access is required. The designation must belong to the team in the path.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Designation deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Invalid team ID or designation ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Team or designation not found for this team.
   /api/v1/project:
     get:
       tags: [Project]
@@ -827,9 +1057,71 @@ components:
             updatedAt:
               type: string
               format: date-time
-    RegisterRequest:
+    DesignationInput:
       type: object
-      required: [username, firstname, lastname, phonenumber, emailaddress, password, userType]
+      required: [name, isActive]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Engineering Manager
+        isActive:
+          type: boolean
+          example: true
+    Designation:
+      allOf:
+        - $ref: '#/components/schemas/DesignationInput'
+        - type: object
+          required: [_id, teamId, createdAt, updatedAt]
+          properties:
+            _id:
+              type: string
+              example: 665f2d4e3b30ca7bd064d912
+            teamId:
+              type: string
+              pattern: '^[a-fA-F0-9]{24}$'
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    DesignationWithTeam:
+      type: object
+      required: [_id, name, isActive, team, createdAt, updatedAt]
+      properties:
+        _id:
+          type: string
+          example: 665f2d4e3b30ca7bd064d912
+        name:
+          type: string
+          example: Engineering Manager
+        isActive:
+          type: boolean
+          example: true
+        team:
+          type: object
+          required: [_id, teamName, isActive]
+          properties:
+            _id:
+              type: string
+              pattern: '^[a-fA-F0-9]{24}$'
+            teamName:
+              type: string
+              example: Platform
+            isActive:
+              type: boolean
+              example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    EmployeeFields:
+      type: object
+      required: [username, firstname, lastname, phonenumber, emailaddress, teamId, designationId, isActive]
       properties:
         username:
           type: string
@@ -861,17 +1153,110 @@ components:
           format: email
           pattern: '^[A-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*\.com$'
           example: alex@example.com
-        password:
+        teamId:
           type: string
-          minLength: 8
-          maxLength: 128
-          format: password
-          writeOnly: true
+          pattern: '^[a-fA-F0-9]{24}$'
+        designationId:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        isActive:
+          type: boolean
+          example: true
+    EmployeeRequest:
+      allOf:
+        - $ref: '#/components/schemas/EmployeeFields'
+        - type: object
+          required: [password]
+          properties:
+            password:
+              type: string
+              minLength: 8
+              maxLength: 128
+              format: password
+              writeOnly: true
+    EmployeeUpdateRequest:
+      $ref: '#/components/schemas/EmployeeFields'
+    EmployeeWriteResponse:
+      type: object
+      required: [_id, username, firstname, lastname, phonenumber, emailaddress, userType, teamId, designationId, isActive, isPermanentPassword]
+      properties:
+        _id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        username:
+          type: string
+        firstname:
+          type: string
+        lastname:
+          type: string
+        phonenumber:
+          type: string
+        emailaddress:
+          type: string
+          format: email
         userType:
           type: string
-          enum: [admin, employee]
-          description: Public registration must use employee. Admin accounts require trusted administrative provisioning.
-          example: employee
+          enum: [employee]
+        teamId:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        designationId:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        isActive:
+          type: boolean
+        isPermanentPassword:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    EmployeeListItem:
+      type: object
+      required: [_id, username, firstname, lastname, phonenumber, emailaddress, isActive, isPermanentPassword, team, designation]
+      properties:
+        _id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        username:
+          type: string
+        firstname:
+          type: string
+        lastname:
+          type: string
+        phonenumber:
+          type: string
+        emailaddress:
+          type: string
+          format: email
+        isActive:
+          type: boolean
+        isPermanentPassword:
+          type: boolean
+        team:
+          type: object
+          nullable: true
+          properties:
+            _id:
+              type: string
+            teamName:
+              type: string
+        designation:
+          type: object
+          nullable: true
+          properties:
+            _id:
+              type: string
+            designationName:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     LoginRequest:
       type: object
       required: [emailaddress, password]
@@ -884,6 +1269,35 @@ components:
           type: string
           format: password
           writeOnly: true
+    PasswordChangeRequest:
+      type: object
+      required: [newPassword, confirmPassword]
+      properties:
+        newPassword:
+          type: string
+          minLength: 9
+          maxLength: 128
+          pattern: '^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{9,128}$'
+          format: password
+          writeOnly: true
+        confirmPassword:
+          type: string
+          minLength: 9
+          maxLength: 128
+          format: password
+          writeOnly: true
+    NewPasswordRequiredResponse:
+      allOf:
+        - $ref: '#/components/schemas/TokenResponse'
+        - type: object
+          required: [message, employeeId]
+          properties:
+            message:
+              type: string
+              enum: [NEW_PASSWORD_REQUIRED]
+            employeeId:
+              type: string
+              pattern: '^[a-fA-F0-9]{24}$'
     RefreshRequest:
       type: object
       required: [refreshtoken]

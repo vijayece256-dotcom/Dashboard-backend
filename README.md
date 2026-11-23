@@ -6,12 +6,24 @@ Copy `.env.example` to `.env` and set `MONGODB_URI` and a cryptographically rand
 
 ## Authentication endpoints
 
-- `POST /api/v1/auth/register` — creates an active `employee` and returns an access token and refresh token. Public registration cannot assign the `admin` role or set `isActive`.
 - `POST /api/v1/auth/login` — accepts `emailaddress` and `password`.
+- `PUT /api/v1/auth/password` — requires the bearer token from login and accepts matching `newPassword` and `confirmPassword`; a successful password change returns a new token pair.
 - `POST /api/v1/auth/refresh` — accepts `refreshtoken`, revokes it, and returns a rotated token pair.
 - `POST /api/v1/auth/logout` — requires `Authorization: Bearer <token>` and revokes that login session immediately.
 
-The access token lifetime is 30 minutes. Refresh tokens are valid for one day and rotated on use. Only token hashes are stored in MongoDB. Registration accepts these fields: `username`, `firstname`, `lastname`, `phonenumber`, `emailaddress`, `password`, and `userType`. Use `employee` for public registration; admin accounts must be provisioned through a trusted administrative process. Username, emailaddress, and phonenumber must be unique. Send `phonenumber` as a string to preserve leading zeroes.
+Access tokens last 5 minutes until `isPermanentPassword` is true, then last 30 minutes. Refresh tokens are valid for one day and rotated on use. Only token hashes are stored in MongoDB. Username, emailaddress, and phonenumber must be unique. Send `phonenumber` as a string to preserve leading zeroes.
+
+Each successful login or password change revokes the customer’s existing access and refresh tokens before issuing the new pair.
+
+## Employee API
+
+- Employee routes require an admin bearer access token.
+- `POST /api/v1/employee` — creates an employee with a temporary password, `teamId`, `designationId`, and `isActive`. `isPermanentPassword` is saved as `false`.
+- `GET /api/v1/employee` — lists employees with `team: { _id, teamName }` and `designation: { _id, designationName }` instead of top-level team and designation IDs.
+- `PUT /api/v1/employee/:employeeId` — updates employee details, team, designation, and active status. Passwords are changed through the auth password endpoint.
+- `DELETE /api/v1/employee/:employeeId` — permanently deletes an employee and revokes their active tokens.
+
+On first login with a temporary password, the API returns `NEW_PASSWORD_REQUIRED`, the `employeeId`, and a 5-minute bearer token for the password change. The new password must be at least 9 characters and include an uppercase letter, a number, and a special character.
 
 The OpenAPI/Swagger specification is in [`swagger.yaml`](swagger.yaml).
 
@@ -24,6 +36,15 @@ Team routes are under `/api/v1/team` and require an admin bearer access token. T
 - `POST /api/v1/team` — create with `{ "teamName": "Platform", "isActive": true }`.
 - `PUT /api/v1/team/:teamId` — replace the team; both fields are required.
 - `DELETE /api/v1/team/:teamId` — permanently delete a team.
+
+## Designation API
+
+Designation routes require an admin bearer access token. Each designation belongs to a team, and names are unique within that team regardless of letter case.
+
+- `POST /api/v1/team/:teamId/designation` — create with `{ "name": "Engineering Manager", "isActive": true }`.
+- `GET /api/v1/team/designation` — list designations with `team: { _id, teamName, isActive }` from the teams collection.
+- `PUT /api/v1/team/:teamId/designation/:designationId` — replace both fields and assign the designation to the team in the path (updates `teamId`).
+- `DELETE /api/v1/team/:teamId/designation/:designationId` — permanently delete a designation from that team.
 
 ## Project API
 
