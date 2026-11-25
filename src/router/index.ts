@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 import authRouter from './authRouter/v1/auth.router';
 import employeeRouter from './employee/v1/employee.router';
 import teamRouter from './team/v1/team.router';
+import teamDesignationCreateRouter from './team/v1/team-designation.router';
 import designationRouter, { teamDesignationRouter } from './designation/v1/designation.router';
 import projectRouter from './project/v1/project.router';
 import projectCommentsRouter from './project/v1/comments.router';
@@ -28,6 +29,7 @@ router.use('/swagger', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
 router.use('/v1/auth', authRouter);
 router.use('/v1/employee', authenticate, requireAdmin, employeeRouter);
 router.use('/v1/team/designation', authenticate, requireAdmin, designationRouter);
+router.use('/v1/team-designation', authenticate, requireAdmin, teamDesignationCreateRouter);
 router.use('/v1/team/:teamId/designation', authenticate, requireAdmin, teamDesignationRouter);
 router.use('/v1/team', authenticate, requireAdmin, teamRouter);
 router.use('/v1/project/:projectId/comments', authenticate, requireRoles('admin', 'employee'), projectCommentsRouter);

@@ -326,6 +326,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+  /api/v1/team-designation:
+    post:
+      tags: [Team, Designation]
+      summary: Create a team and designation
+      description: Admin access is required. Creates an active team and an active designation linked to it. Team names are globally unique without regard to letter case; designation names are unique within a team without regard to letter case.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamName, designationName]
+              properties:
+                teamName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  example: Platform
+                designationName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  example: Engineer
+      responses:
+        '201':
+          description: Team and designation created, both active.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [team, designation]
+                properties:
+                  team:
+                    $ref: '#/components/schemas/Team'
+                  designation:
+                    $ref: '#/components/schemas/Designation'
+        '400':
+          description: Invalid request fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Admin access is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '409':
+          description: Team name already exists (ignoring case), or the designation name conflicts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
   /api/v1/team/{teamId}:
     parameters:
       - name: teamId

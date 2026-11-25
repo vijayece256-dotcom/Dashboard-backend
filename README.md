@@ -31,6 +31,8 @@ The OpenAPI/Swagger specification is in [`swagger.yaml`](swagger.yaml).
 
 Team routes are under `/api/v1/team` and require an admin bearer access token. Team names are unique regardless of letter case.
 
+- `POST /api/v1/team-designation` — create a team and its designation together with `{ "teamName": "Platform", "designationName": "Engineer" }`. Both records are created with `isActive: true`.
+
 - `GET /api/v1/team` — list teams.
 - `GET /api/v1/team/:teamId` — get a team.
 - `POST /api/v1/team` — create with `{ "teamName": "Platform", "isActive": true }`.
