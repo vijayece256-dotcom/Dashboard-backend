@@ -106,9 +106,34 @@ paths:
     get:
       tags: [Employee]
       summary: List employees
-      description: Admin access is required. Team and designation IDs are returned as nested objects with their names.
+      description: Admin access is required. team, designation, and projectId filters are optional and ignored when empty. Set isAccountPage=true to return account fields; false or omitted returns employee list fields.
       security:
         - bearerAuth: []
+      parameters:
+        - name: team
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Team name; the matching team's ID is used to filter employees by teamId.
+        - name: designation
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Designation name; matching designation IDs are used to filter employees by designationId.
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: MongoDB project ID or generated projectID (for example PRJ-1001); returns employees assigned to the project.
+        - name: isAccountPage
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, returns firstName, lastname, email, isActive, and featureAccess containing feature names. When false or omitted, returns employeeCode, firstname, lastname, team, designation, isStatus, and email.
       responses:
         '200':
           description: Employee list.
@@ -117,7 +142,9 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/EmployeeListItem'
+                  oneOf:
+                    - $ref: '#/components/schemas/EmployeeAccountListItem'
+                    - $ref: '#/components/schemas/EmployeeListItem'
         '401':
           description: Access token is missing, invalid, expired, or revoked.
         '403':
@@ -125,7 +152,7 @@ paths:
     post:
       tags: [Employee]
       summary: Create an employee
-      description: Admin access is required. The team must be active, and the designation must be active and belong to that team.
+      description: Admin access is required. teamId and designationId are optional; supplied references must be active, and a supplied designation must belong to teamId when teamId is also supplied.
       security:
         - bearerAuth: []
       requestBody:
@@ -148,7 +175,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ValidationError'
         '409':
-          description: Username, emailaddress, or phonenumber already exists.
+          description: employee_code, emailaddress, or phonenumber already exists.
           content:
             application/json:
               schema:
@@ -165,6 +192,58 @@ paths:
         schema:
           type: string
           pattern: '^[a-fA-F0-9]{24}$'
+    get:
+      tags: [Employee]
+      summary: Get an employee by ID
+      description: Admin access is required. Returns all employee fields except the password, including featureAccess when set.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Employee returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeWriteResponse'
+        '400':
+          description: Invalid employee ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Employee not found.
+    patch:
+      tags: [Employee]
+      summary: Activate or deactivate an employee
+      description: Admin access is required. Set isActive to true to activate the employee or false to deactivate them.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isActive]
+              properties:
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Employee status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeWriteResponse'
+        '400':
+          description: Invalid employee ID or isActive value.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Employee not found.
     put:
       tags: [Employee]
       summary: Update an employee
@@ -385,6 +464,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/ValidationError'
   /api/v1/team-designation:
+    get:
+      tags: [Team, Designation]
+      summary: List teams and designations
+      description: Admin access is required. Returns separate teams and designations arrays. Set isAnalytics=true to include overall and per-item counts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: isAnalytics
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, includes totalTeams, totalDesignation, each team's totalDesignationCount, and each designation's totalEmployeeCount.
+      responses:
+        '200':
+          description: Teams and designations returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [teams, designations]
+                properties:
+                  totalTeams:
+                    type: integer
+                  totalDesignation:
+                    type: integer
+                  teams:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/NamedActiveItem'
+                        - type: object
+                          properties:
+                            totalDesignationCount:
+                              type: integer
+                  designations:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/NamedActiveItem'
+                        - type: object
+                          properties:
+                            totalEmployeeCount:
+                              type: integer
+        '400':
+          description: isAnalytics must be true or false.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
     post:
       tags: [Team, Designation]
       summary: Create a team and designation
@@ -647,18 +776,27 @@ paths:
     get:
       tags: [Project]
       summary: List projects
-      description: Admin access is required. Returns the project fields used by the project list.
+      description: Admin access is required. Set isAnalytics=true to return the total project count and counts by status; otherwise returns the project list.
       security:
         - bearerAuth: []
+      parameters:
+        - name: isAnalytics
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, returns totalProject and counts for InProgress, OnHold, Completed, and Upcoming.
       responses:
         '200':
-          description: Projects ordered by generated projectID. Each item includes a nested team object with its _id and teamName.
+          description: Project list or status analytics, depending on isAnalytics.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProjectListItem'
+                oneOf:
+                  - $ref: '#/components/schemas/ProjectListResponse'
+                  - $ref: '#/components/schemas/ProjectAnalytics'
+        '400':
+          description: isAnalytics must be true or false.
         '401':
           description: Access token is missing, invalid, expired, or revoked.
         '403':
@@ -1091,6 +1229,32 @@ components:
             updatedAt:
               type: string
               format: date-time
+    ProjectListResponse:
+      type: object
+      required: [projects]
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectListItem'
+    ProjectAnalytics:
+      type: object
+      required: [totalProject, InProgress, OnHold, Completed, Upcoming, projects]
+      properties:
+        totalProject:
+          type: integer
+        InProgress:
+          type: integer
+        OnHold:
+          type: integer
+        Completed:
+          type: integer
+        Upcoming:
+          type: integer
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectListItem'
     ProjectListItem:
       type: object
       required: [_id, projectID, projectName, projectOwner, team, status]
@@ -1157,6 +1321,17 @@ components:
         updatedAt:
           type: string
           format: date-time
+    NamedActiveItem:
+      type: object
+      required: [_id, name, isActive]
+      properties:
+        _id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        name:
+          type: string
+        isActive:
+          type: boolean
     TeamReference:
       type: object
       required: [_id, teamName]
@@ -1257,21 +1432,21 @@ components:
           format: date-time
     EmployeeFields:
       type: object
-      required: [username, firstname, lastname, phonenumber, emailaddress, teamId, designationId, isActive]
+      required: [firstName, lastName, emailaddress, isActive]
       properties:
-        username:
+        employee_code:
           type: string
-          minLength: 7
+          minLength: 1
           maxLength: 30
-          pattern: '^[A-Za-z0-9]{7,30}$'
-          example: employee01
-        firstname:
+          pattern: '^[A-Za-z0-9-]{1,30}$'
+          example: BF-002
+        firstName:
           type: string
           minLength: 1
           maxLength: 50
           pattern: '^[A-Za-z]{1,50}$'
           example: Alex
-        lastname:
+        lastName:
           type: string
           minLength: 1
           maxLength: 50
@@ -1298,12 +1473,26 @@ components:
         isActive:
           type: boolean
           example: true
+        featureAccess:
+          type: array
+          items:
+            type: string
+          description: Feature codes must exist in the Feature collection.
+          example: [BF-002]
+        isReportingManager:
+          type: boolean
+        manager_id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
     EmployeeRequest:
       allOf:
         - $ref: '#/components/schemas/EmployeeFields'
         - type: object
-          required: [password]
+          required: [password, userType]
           properties:
+            userType:
+              type: string
+              enum: [employee]
             password:
               type: string
               minLength: 8
@@ -1311,19 +1500,22 @@ components:
               format: password
               writeOnly: true
     EmployeeUpdateRequest:
-      $ref: '#/components/schemas/EmployeeFields'
+      allOf:
+        - $ref: '#/components/schemas/EmployeeFields'
+        - type: object
+          required: [employee_code, phonenumber]
     EmployeeWriteResponse:
       type: object
-      required: [_id, username, firstname, lastname, phonenumber, emailaddress, userType, teamId, designationId, isActive, isPermanentPassword]
+      required: [_id, firstName, lastName, emailaddress, userType, isActive, isPermanentPassword]
       properties:
         _id:
           type: string
           pattern: '^[a-fA-F0-9]{24}$'
-        username:
+        employee_code:
           type: string
-        firstname:
+        firstName:
           type: string
-        lastname:
+        lastName:
           type: string
         phonenumber:
           type: string
@@ -1343,6 +1535,15 @@ components:
           type: boolean
         isPermanentPassword:
           type: boolean
+        featureAccess:
+          type: array
+          items:
+            type: string
+        isReportingManager:
+          type: boolean
+        manager_id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
         createdAt:
           type: string
           format: date-time
@@ -1351,25 +1552,18 @@ components:
           format: date-time
     EmployeeListItem:
       type: object
-      required: [_id, username, firstname, lastname, phonenumber, emailaddress, isActive, isPermanentPassword, team, designation]
+      required: [employeeCode, firstname, lastname, team, designation, isStatus, email]
       properties:
-        _id:
-          type: string
-          pattern: '^[a-fA-F0-9]{24}$'
-        username:
+        employeeCode:
           type: string
         firstname:
           type: string
         lastname:
           type: string
-        phonenumber:
-          type: string
-        emailaddress:
+        email:
           type: string
           format: email
-        isActive:
-          type: boolean
-        isPermanentPassword:
+        isStatus:
           type: boolean
         team:
           type: object
@@ -1387,12 +1581,29 @@ components:
               type: string
             designationName:
               type: string
-        createdAt:
+    EmployeeAccountListItem:
+      type: object
+      required: [_id, firstName, lastname, email, isActive, isPermanentPassword, featureAccess]
+      properties:
+        _id:
           type: string
-          format: date-time
-        updatedAt:
+          pattern: '^[a-fA-F0-9]{24}$'
+        firstName:
           type: string
-          format: date-time
+        lastname:
+          type: string
+        email:
+          type: string
+          format: email
+        isActive:
+          type: boolean
+        isPermanentPassword:
+          type: boolean
+        featureAccess:
+          type: array
+          items:
+            type: string
+          description: Feature names corresponding to the employee's feature codes.
     LoginRequest:
       type: object
       required: [emailaddress, password]

@@ -11,6 +11,7 @@ import { DesignationModel } from './src/models/designation.model';
 import { ProjectModel } from './src/models/project.model';
 import { ProjectActivityModel } from './src/models/project-activity.model';
 import { FeatureModel } from './src/models/feature.model';
+import { CustomerModel } from './src/models/customer.model';
 
 const app: Application = express();
 const PORT = Number(process.env.PORT ?? 8000);
@@ -29,8 +30,20 @@ async function start(): Promise<void> {
   }
   await mongoConfig(mongoUri);
   await migrateLegacyFeatureFields();
-  await Promise.all([TeamModel.init(), DesignationModel.init(), ProjectModel.init(), ProjectActivityModel.init(), FeatureModel.init()]);
+  await migrateOptionalEmployeeIndexes();
+  await Promise.all([TeamModel.init(), DesignationModel.init(), ProjectModel.init(), ProjectActivityModel.init(), FeatureModel.init(), CustomerModel.init()]);
   app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+}
+
+async function migrateOptionalEmployeeIndexes(): Promise<void> {
+  const indexes = await CustomerModel.collection.indexes().catch((error: unknown) => {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 26) return [];
+    throw error;
+  });
+  for (const field of ['username', 'phonenumber']) {
+    const index = indexes.find((candidate) => candidate.key?.[field] === 1 && candidate.unique && !candidate.sparse);
+    if (index?.name) await CustomerModel.collection.dropIndex(index.name);
+  }
 }
 
 async function migrateLegacyFeatureFields(): Promise<void> {

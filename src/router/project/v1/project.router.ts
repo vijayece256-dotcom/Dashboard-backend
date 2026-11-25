@@ -121,14 +121,39 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   } catch (error) { next(error); }
 });
 
-router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const analyticsValue = req.query.isAnalytics;
+    if (analyticsValue !== undefined && analyticsValue !== 'true' && analyticsValue !== 'false') {
+      throw new HttpError(400, 'isAnalytics must be true or false.');
+    }
+    if (analyticsValue === 'true') {
+      const [totalProject, statusCounts, projects] = await Promise.all([
+        ProjectModel.countDocuments(),
+        ProjectModel.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+        ProjectModel.find()
+          .select(listFields)
+          .populate('teamId', 'teamName')
+          .sort({ projectID: 1 })
+          .lean(),
+      ]);
+      const counts = new Map(statusCounts.map((item: { _id: string; count: number }) => [item._id, item.count]));
+      res.status(200).json({
+        totalProject,
+        InProgress: counts.get('InProgress') ?? 0,
+        OnHold: counts.get('OnHold') ?? 0,
+        Completed: counts.get('Completed') ?? 0,
+        Upcoming: counts.get('Upcoming') ?? 0,
+        projects: projects.map(withTeamObject),
+      });
+      return;
+    }
     const projects = await ProjectModel.find()
       .select(listFields)
       .populate('teamId', 'teamName')
       .sort({ projectID: 1 })
       .lean();
-    res.status(200).json(projects.map(withTeamObject));
+    res.status(200).json({ projects: projects.map(withTeamObject) });
   } catch (error) { next(error); }
 });
 

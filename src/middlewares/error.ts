@@ -18,7 +18,10 @@ export const errorHandler = (err: unknown, _req: Request, res: Response, _next: 
       : {};
     const errors: Record<string, string> = {};
     for (const field of ['username', 'emailaddress', 'phonenumber', 'teamName', 'name', 'projectID', 'projectName', 'featureCode']) {
-      if (field in keyPattern) errors[field] = `${field} already exists.`;
+      if (field in keyPattern) {
+        const responseField = field === 'username' ? 'employee_code' : field;
+        errors[responseField] = `${responseField} already exists.`;
+      }
     }
     if (Object.keys(errors).length === 0) errors.value = 'A unique value already exists.';
     res.status(409).json({ message: 'Duplicate value', errors });
