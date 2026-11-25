@@ -308,12 +308,12 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Access tokens last 5 minutes when isPermanentPassword is false and 30 minutes when it is true. A temporary-password login also returns NEW_PASSWORD_REQUIRED and employeeId. Successful login revokes the customer's previous access and refresh tokens.
+          description: Access tokens last 5 minutes when isPermanentPassword is false and 30 minutes when it is true. Successful login returns a profile; temporary-password login also returns NEW_PASSWORD_REQUIRED and employeeId. Successful login revokes the customer's previous access and refresh tokens.
           content:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/TokenResponse'
+                  - $ref: '#/components/schemas/LoginResponse'
                   - $ref: '#/components/schemas/NewPasswordRequiredResponse'
         '401':
           description: Emailaddress or password is invalid.
@@ -1635,7 +1635,7 @@ components:
           writeOnly: true
     NewPasswordRequiredResponse:
       allOf:
-        - $ref: '#/components/schemas/TokenResponse'
+        - $ref: '#/components/schemas/LoginResponse'
         - type: object
           required: [message, employeeId]
           properties:
@@ -1645,6 +1645,52 @@ components:
             employeeId:
               type: string
               pattern: '^[a-fA-F0-9]{24}$'
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/TokenResponse'
+        - type: object
+          required: [profile]
+          properties:
+            profile:
+              $ref: '#/components/schemas/LoginProfile'
+    LoginProfile:
+      type: object
+      required: [userType, firstname, lastname, phonenumber, email, team, designation, featureAccess]
+      properties:
+        userType:
+          type: string
+          enum: [admin, employee]
+        firstname:
+          type: string
+        lastname:
+          type: string
+        phonenumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+        team:
+          type: object
+          nullable: true
+          properties:
+            _id:
+              type: string
+            name:
+              type: string
+        designation:
+          type: object
+          nullable: true
+          properties:
+            _id:
+              type: string
+            name:
+              type: string
+        featureAccess:
+          type: array
+          items:
+            type: string
+          description: Feature names corresponding to the employee's feature codes.
     RefreshRequest:
       type: object
       required: [refreshtoken]

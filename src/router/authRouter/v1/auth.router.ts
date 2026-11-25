@@ -1,6 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { CustomerModel, UserType } from '../../../models/customer.model';
+import { Customer, CustomerModel, UserType } from '../../../models/customer.model';
+import { DesignationModel } from '../../../models/designation.model';
+import { FeatureModel } from '../../../models/feature.model';
 import { RefreshTokenModel } from '../../../models/refresh-token.model';
+import { TeamModel } from '../../../models/team.model';
 import { authenticate } from '../../../middlewares/authenticate';
 import { HttpError } from '../../../middlewares/error';
 import { createAccessToken, createRefreshToken, hashPassword, hashToken, REFRESH_TTL_MS, verifyPassword } from '../../../utils/auth';
@@ -52,6 +55,31 @@ function sendAuthResponse(
   });
 }
 
+async function buildProfile(customer: Customer): Promise<Record<string, unknown>> {
+  const featureCodes: string[] = customer.featureAccess ?? [];
+  const [team, designation, features] = await Promise.all([
+    customer.teamId ? TeamModel.findById(customer.teamId).select('_id teamName').lean() : Promise.resolve(null),
+    customer.designationId ? DesignationModel.findById(customer.designationId).select('_id name').lean() : Promise.resolve(null),
+    featureCodes.length
+      ? FeatureModel.find({ featureCode: { $in: featureCodes } }).collation({ locale: 'en', strength: 2 }).select('featureCode featureName').lean()
+      : Promise.resolve([]),
+  ]);
+  const featureNames = new Map(features.map((feature) => [feature.featureCode.toLocaleLowerCase(), feature.featureName]));
+  return {
+    userType: customer.userType,
+    firstname: customer.firstname,
+    lastname: customer.lastname,
+    phonenumber: customer.phonenumber ?? null,
+    email: customer.emailaddress,
+    team: team ? { _id: team._id, name: team.teamName } : null,
+    designation: designation ? { _id: designation._id, name: designation.name } : null,
+    featureAccess: featureCodes.flatMap((code) => {
+      const name = featureNames.get(code.toLocaleLowerCase());
+      return name ? [name] : [];
+    }),
+  };
+}
+
 router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { emailaddress, password } = validateLogin(req.body);
@@ -59,13 +87,14 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     const valid = customer ? await verifyPassword(password, customer.password) : false;
     if (!customer || !valid) throw new HttpError(401, 'emailaddress or password is invalid');
     if (!customer.isActive) throw new HttpError(403, 'Account is inactive');
+    const profile = await buildProfile(customer);
     if (!customer.isPermanentPassword) {
       const tokens = await createFreshSession(customer);
-      sendAuthResponse(res, tokens, 200, { message: 'NEW_PASSWORD_REQUIRED', employeeId: customer._id });
+      sendAuthResponse(res, tokens, 200, { message: 'NEW_PASSWORD_REQUIRED', employeeId: customer._id, profile });
       return;
     }
     const tokens = await createFreshSession(customer);
-    sendAuthResponse(res, tokens);
+    sendAuthResponse(res, tokens, 200, { profile });
   } catch (error) { next(error); }
 });
 
