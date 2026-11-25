@@ -11,6 +11,7 @@ import designationRouter, { teamDesignationRouter } from './designation/v1/desig
 import projectRouter from './project/v1/project.router';
 import projectCommentsRouter from './project/v1/comments.router';
 import projectActivityRouter from './project/v1/activity.router';
+import featureRouter from './feature/v1/feature.router';
 import { authenticate } from '../middlewares/authenticate';
 import { requireAdmin } from '../middlewares/require-admin';
 import { requireRoles } from '../middlewares/require-roles';
@@ -35,5 +36,6 @@ router.use('/v1/team', authenticate, requireAdmin, teamRouter);
 router.use('/v1/project/:projectId/comments', authenticate, requireRoles('admin', 'employee'), projectCommentsRouter);
 router.use('/v1/project/:projectId/activities', authenticate, requireAdmin, projectActivityRouter);
 router.use('/v1/project', authenticate, requireAdmin, projectRouter);
+router.use('/v1/feature', authenticate, requireAdmin, featureRouter);
 
 export default router;

@@ -17,7 +17,7 @@ export const errorHandler = (err: unknown, _req: Request, res: Response, _next: 
       ? err.keyPattern as Record<string, unknown>
       : {};
     const errors: Record<string, string> = {};
-    for (const field of ['username', 'emailaddress', 'phonenumber', 'teamName', 'name', 'projectID', 'projectName']) {
+    for (const field of ['username', 'emailaddress', 'phonenumber', 'teamName', 'name', 'projectID', 'projectName', 'featureCode']) {
       if (field in keyPattern) errors[field] = `${field} already exists.`;
     }
     if (Object.keys(errors).length === 0) errors.value = 'A unique value already exists.';
