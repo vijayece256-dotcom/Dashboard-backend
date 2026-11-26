@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const isAnalytics = analyticsValue === 'true';
     const [teams, designations] = await Promise.all([
       TeamModel.find().select('_id teamName isActive').sort({ teamName: 1 }).lean(),
-      DesignationModel.find().select('_id name isActive').sort({ name: 1 }).lean(),
+      DesignationModel.find().select('_id name teamId isActive').sort({ name: 1 }).lean(),
     ]);
     if (isAnalytics) {
       const [totalTeams, totalDesignation, designationsPerTeam, employeesPerDesignation] = await Promise.all([
@@ -55,9 +55,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           isActive,
           totalDesignationCount: designationCounts.get(String(_id)) ?? 0,
         })),
-        designations: designations.map(({ _id, name, isActive }) => ({
+        designations: designations.map(({ _id, name, teamId, isActive }) => ({
           _id,
           name,
+          teamId,
           isActive,
           totalEmployeeCount: employeeCounts.get(String(_id)) ?? 0,
         })),
@@ -66,7 +67,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
     res.status(200).json({
       teams: teams.map(({ _id, teamName, isActive }) => ({ _id, name: teamName, isActive })),
-      designations: designations.map(({ _id, name, isActive }) => ({ _id, name, isActive })),
+      designations: designations.map(({ _id, name, teamId, isActive }) => ({ _id, name, teamId, isActive })),
     });
   } catch (error) { next(error); }
 });

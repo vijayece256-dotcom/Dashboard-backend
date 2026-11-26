@@ -505,7 +505,11 @@ paths:
                       allOf:
                         - $ref: '#/components/schemas/NamedActiveItem'
                         - type: object
+                          required: [teamId]
                           properties:
+                            teamId:
+                              type: string
+                              pattern: '^[a-fA-F0-9]{24}$'
                             totalEmployeeCount:
                               type: integer
         '400':
