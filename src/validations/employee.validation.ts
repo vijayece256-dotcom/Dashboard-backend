@@ -15,6 +15,8 @@ export interface EmployeeInput {
   isReportingManager?: boolean;
   manager_id?: Types.ObjectId;
   isActive: boolean;
+  isAccount: boolean;
+  isEmployee: boolean;
 }
 
 const emailPattern = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*\.com$/i;
@@ -89,6 +91,8 @@ export function validateEmployeeInput(value: unknown, requirePassword = false): 
     errors.isReportingManager = 'isReportingManager must be a boolean.';
   }
   if (typeof body.isActive !== 'boolean') errors.isActive = 'isActive must be a boolean.';
+  if (typeof body.isAccount !== 'boolean') errors.isAccount = 'isAccount must be a boolean.';
+  if (typeof body.isEmployee !== 'boolean') errors.isEmployee = 'isEmployee must be a boolean.';
 
   if (Object.keys(errors).length) throw new HttpError(400, 'Validation failed', errors);
   return {
@@ -105,5 +109,7 @@ export function validateEmployeeInput(value: unknown, requirePassword = false): 
     ...(body.isReportingManager !== undefined ? { isReportingManager: body.isReportingManager as boolean } : {}),
     ...(managerId ? { manager_id: managerId } : {}),
     isActive: body.isActive as boolean,
+    isAccount: body.isAccount as boolean,
+    isEmployee: body.isEmployee as boolean,
   };
 }

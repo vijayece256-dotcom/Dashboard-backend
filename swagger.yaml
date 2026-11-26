@@ -1432,7 +1432,7 @@ components:
           format: date-time
     EmployeeFields:
       type: object
-      required: [firstName, lastName, emailaddress, isActive]
+      required: [firstName, lastName, emailaddress, isActive, isAccount, isEmployee]
       properties:
         employee_code:
           type: string
@@ -1473,6 +1473,12 @@ components:
         isActive:
           type: boolean
           example: true
+        isAccount:
+          type: boolean
+          example: false
+        isEmployee:
+          type: boolean
+          example: true
         featureAccess:
           type: array
           items:
@@ -1506,7 +1512,7 @@ components:
           required: [employee_code, phonenumber]
     EmployeeWriteResponse:
       type: object
-      required: [_id, firstName, lastName, emailaddress, userType, isActive, isPermanentPassword]
+      required: [_id, firstName, lastName, emailaddress, userType, isActive, isAccount, isEmployee, isPermanentPassword]
       properties:
         _id:
           type: string
@@ -1532,6 +1538,10 @@ components:
           type: string
           pattern: '^[a-fA-F0-9]{24}$'
         isActive:
+          type: boolean
+        isAccount:
+          type: boolean
+        isEmployee:
           type: boolean
         isPermanentPassword:
           type: boolean

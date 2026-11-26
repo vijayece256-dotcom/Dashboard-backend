@@ -131,6 +131,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const employees = await CustomerModel.aggregate([
       { $match: {
         userType: 'employee',
+        ...(isAccountPage ? {} : { isEmployee: true }),
         ...(matchingTeamIds ? { teamId: { $in: matchingTeamIds } } : {}),
         ...(matchingDesignationIds ? { designationId: { $in: matchingDesignationIds } } : {}),
         ...(projectEmployeeIds ? { _id: { $in: projectEmployeeIds } } : {}),
@@ -223,6 +224,8 @@ router.put('/:employeeId', async (req: Request, res: Response, next: NextFunctio
       teamId: input.teamId,
       designationId: input.designationId,
       isActive: input.isActive,
+      isAccount: input.isAccount,
+      isEmployee: input.isEmployee,
       ...(featureAccess !== undefined ? { featureAccess } : {}),
       ...(input.isReportingManager !== undefined ? { isReportingManager: input.isReportingManager } : {}),
       ...(input.manager_id ? { manager_id: input.manager_id } : {}),

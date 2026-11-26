@@ -11,6 +11,8 @@ export interface Customer {
   password: string;
   isPermanentPassword: boolean;
   isActive: boolean;
+  isAccount: boolean;
+  isEmployee: boolean;
   userType: UserType;
   teamId?: Types.ObjectId;
   designationId?: Types.ObjectId;
@@ -28,6 +30,8 @@ const customerSchema = new Schema<Customer>({
   password: { type: String, required: true, select: false },
   isPermanentPassword: { type: Boolean, required: true, default: false },
   isActive: { type: Boolean, required: true, default: true },
+  isAccount: { type: Boolean, required: true, default: false },
+  isEmployee: { type: Boolean, required: true, default: true },
   userType: { type: String, required: true, enum: ['admin', 'employee'] },
   teamId: { type: Schema.Types.ObjectId, ref: 'tl_team' },
   designationId: { type: Schema.Types.ObjectId, ref: 'tl_designation' },
