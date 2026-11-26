@@ -164,6 +164,11 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         firstName: '$firstname',
         lastname: '$lastname',
         email: '$emailaddress',
+        designation: { $cond: [
+          { $ifNull: ['$designation._id', false] },
+          { name: '$designation.name' },
+          null,
+        ] },
         isActive: 1,
         isPermanentPassword: 1,
         featureAccess: { $ifNull: [

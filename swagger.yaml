@@ -1623,7 +1623,7 @@ components:
             $ref: '#/components/schemas/NewAccountListItem'
     EmployeeAccountListItem:
       type: object
-      required: [_id, firstName, lastname, email, isActive, isPermanentPassword, featureAccess]
+      required: [_id, firstName, lastname, email, designation, isActive, isPermanentPassword, featureAccess]
       properties:
         _id:
           type: string
@@ -1635,6 +1635,13 @@ components:
         email:
           type: string
           format: email
+        designation:
+          type: object
+          nullable: true
+          required: [name]
+          properties:
+            name:
+              type: string
         isActive:
           type: boolean
         isPermanentPassword:
