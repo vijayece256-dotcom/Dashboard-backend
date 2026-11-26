@@ -106,7 +106,7 @@ paths:
     get:
       tags: [Employee]
       summary: List employees
-      description: Admin access is required. team, designation, and projectId filters are optional and ignored when empty. Set isAccountPage=true to return account fields; false or omitted returns employee list fields.
+      description: Admin access is required. team, designation, and projectId filters are optional and ignored when empty. Set isAccountPage=true to return account fields. When false, omitted, or null, returns activeEmployee and newAccounts; newAccounts contains active records where isEmployee is false.
       security:
         - bearerAuth: []
       parameters:
@@ -133,18 +133,18 @@ paths:
           required: false
           schema:
             type: boolean
-          description: When true, returns firstName, lastname, email, isActive, and featureAccess containing feature names. When false or omitted, returns employeeCode, firstname, lastname, team, designation, isStatus, and email.
+          description: When true, returns account fields. When false, omitted, or null, returns activeEmployee using employee list fields plus newAccounts with _id, firstname, lastname, and email.
       responses:
         '200':
           description: Employee list.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/EmployeeAccountListItem'
-                    - $ref: '#/components/schemas/EmployeeListItem'
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/EmployeeAccountListItem'
+                  - $ref: '#/components/schemas/EmployeeListResponse'
         '401':
           description: Access token is missing, invalid, expired, or revoked.
         '403':
@@ -1591,6 +1591,32 @@ components:
               type: string
             designationName:
               type: string
+    NewAccountListItem:
+      type: object
+      required: [_id, firstname, lastname, email]
+      properties:
+        _id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        firstname:
+          type: string
+        lastname:
+          type: string
+        email:
+          type: string
+          format: email
+    EmployeeListResponse:
+      type: object
+      required: [activeEmployee, newAccounts]
+      properties:
+        activeEmployee:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmployeeListItem'
+        newAccounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewAccountListItem'
     EmployeeAccountListItem:
       type: object
       required: [_id, firstName, lastname, email, isActive, isPermanentPassword, featureAccess]

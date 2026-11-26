@@ -114,7 +114,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       projectEmployeeIds = project?.assignedEmployees ?? [];
     }
     const accountPageValue = req.query.isAccountPage;
-    if (accountPageValue !== undefined && accountPageValue !== 'true' && accountPageValue !== 'false') {
+    if (accountPageValue !== undefined && accountPageValue !== null && accountPageValue !== 'null' && accountPageValue !== 'true' && accountPageValue !== 'false') {
       throw new HttpError(400, 'isAccountPage must be true or false.');
     }
     const isAccountPage = accountPageValue === 'true';
@@ -128,13 +128,16 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       { _id: '$designation._id', designationName: '$designation.name' },
       null,
     ] };
+    const sharedMatch = {
+      userType: 'employee',
+      ...(matchingTeamIds ? { teamId: { $in: matchingTeamIds } } : {}),
+      ...(matchingDesignationIds ? { designationId: { $in: matchingDesignationIds } } : {}),
+      ...(projectEmployeeIds ? { _id: { $in: projectEmployeeIds } } : {}),
+    };
     const employees = await CustomerModel.aggregate([
       { $match: {
-        userType: 'employee',
+        ...sharedMatch,
         ...(isAccountPage ? {} : { isEmployee: true }),
-        ...(matchingTeamIds ? { teamId: { $in: matchingTeamIds } } : {}),
-        ...(matchingDesignationIds ? { designationId: { $in: matchingDesignationIds } } : {}),
-        ...(projectEmployeeIds ? { _id: { $in: projectEmployeeIds } } : {}),
       } },
       { $lookup: {
         from: TeamModel.collection.name,
@@ -180,7 +183,21 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       } },
       { $sort: isAccountPage ? { lastname: 1, firstName: 1 } : { lastname: 1, firstname: 1 } },
     ]);
-    res.status(200).json(employees);
+    if (isAccountPage) {
+      res.status(200).json(employees);
+      return;
+    }
+    const newAccounts = await CustomerModel.aggregate([
+      { $match: { ...sharedMatch, isEmployee: false, isActive: true } },
+      { $project: {
+        _id: 1,
+        firstname: '$firstname',
+        lastname: '$lastname',
+        email: '$emailaddress',
+      } },
+      { $sort: { lastname: 1, firstname: 1 } },
+    ]);
+    res.status(200).json({ activeEmployee: employees, newAccounts });
   } catch (error) { next(error); }
 });
 
