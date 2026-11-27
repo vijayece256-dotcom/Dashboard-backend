@@ -10,7 +10,7 @@ import { ProjectInput, validateProjectInput } from '../../../validations/project
 
 const router = Router();
 const listFields = '_id projectID projectName clientName projectOwner teamId startDate expectedEndDate status';
-const editableFields = ['projectName', 'clientName', 'projectOwner', 'department', 'teamId', 'startDate', 'expectedEndDate', 'assignedEmployees', 'status', 'description'] as const;
+const editableFields = ['projectName', 'clientName', 'projectOwner', 'department', 'teamId', 'startDate', 'expectedEndDate', 'assignedEmployees', 'status', 'statusReason', 'description'] as const;
 
 function getChangedFields(before: Record<string, unknown>, after: Record<string, unknown>) {
   return editableFields.flatMap((field) => {

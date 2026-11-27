@@ -12,6 +12,7 @@ export interface ProjectInput {
   expectedEndDate?: Date;
   assignedEmployees: Types.ObjectId[];
   status: ProjectStatus;
+  statusReason?: string;
   description?: string;
 }
 
@@ -66,6 +67,7 @@ export function validateProjectInput(value: unknown): ProjectInput {
   const clientName = optionalString(body, 'clientName', 150, errors);
   const department = optionalString(body, 'department', 100, errors);
   const description = optionalString(body, 'description', 5000, errors);
+  const statusReason = optionalString(body, 'statusReason', 1000, errors);
   const startDate = optionalDate(body.startDate, 'startDate', errors);
   const expectedEndDate = optionalDate(body.expectedEndDate, 'expectedEndDate', errors);
 
@@ -113,6 +115,7 @@ export function validateProjectInput(value: unknown): ProjectInput {
     expectedEndDate,
     assignedEmployees: employeeIds,
     status: status as ProjectStatus,
+    statusReason,
     description,
   };
 }

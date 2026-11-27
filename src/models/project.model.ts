@@ -13,6 +13,7 @@ export interface Project {
   expectedEndDate?: Date;
   assignedEmployees: Types.ObjectId[];
   status: ProjectStatus;
+  statusReason?: string;
   description?: string;
 }
 
@@ -27,6 +28,7 @@ const projectSchema = new Schema<Project>({
   expectedEndDate: { type: Date },
   assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'tl_customer' }],
   status: { type: String, enum: ['Upcoming', 'InProgress', 'Completed', 'OnHold'], default: 'Upcoming', required: true },
+  statusReason: { type: String, trim: true, maxlength: 1000 },
   description: { type: String, trim: true, maxlength: 5000 },
 }, { timestamps: true, versionKey: false });
 
