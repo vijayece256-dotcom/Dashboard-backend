@@ -12,6 +12,46 @@ import { validateEmployeeInput } from '../../../validations/employee.validation'
 
 const router = Router();
 
+router.get('/manager', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const teamIdValue = req.query.teamId;
+    if (teamIdValue !== undefined && typeof teamIdValue !== 'string') {
+      throw new HttpError(400, 'teamId must be a single string value.');
+    }
+
+    const teamId = typeof teamIdValue === 'string' ? teamIdValue.trim() : '';
+    if (teamId && !isValidObjectId(teamId)) throw new HttpError(400, 'Invalid team ID');
+
+    const managers = await CustomerModel.aggregate([
+      { $match: {
+        isReportingManager: true,
+        ...(teamId ? { teamId: new Types.ObjectId(teamId) } : {}),
+      } },
+      { $lookup: {
+        from: TeamModel.collection.name,
+        localField: 'teamId',
+        foreignField: '_id',
+        as: 'team',
+      } },
+      { $unwind: { path: '$team', preserveNullAndEmptyArrays: true } },
+      { $project: {
+        _id: 1,
+        firstName: '$firstname',
+        lastName: '$lastname',
+        email: '$emailaddress',
+        team: { $cond: [
+          { $ifNull: ['$team._id', false] },
+          { _id: '$team._id', teamName: '$team.teamName' },
+          null,
+        ] },
+      } },
+      { $sort: { firstName: 1, lastName: 1 } },
+    ]);
+
+    res.status(200).json(managers);
+  } catch (error) { next(error); }
+});
+
 async function validateReferences(teamId?: Types.ObjectId, designationId?: Types.ObjectId): Promise<void> {
   const [team, designation] = await Promise.all([
     teamId ? TeamModel.exists({ _id: teamId, isActive: true }) : Promise.resolve(true),
