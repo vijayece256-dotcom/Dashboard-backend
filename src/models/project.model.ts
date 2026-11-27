@@ -8,7 +8,7 @@ export interface Project {
   clientName?: string;
   projectOwner: string;
   department?: string;
-  teamId: Types.ObjectId;
+  teamId: Types.ObjectId[];
   startDate?: Date;
   expectedEndDate?: Date;
   assignedEmployees: Types.ObjectId[];
@@ -23,7 +23,7 @@ const projectSchema = new Schema<Project>({
   clientName: { type: String, trim: true, maxlength: 150 },
   projectOwner: { type: String, required: true, trim: true, minlength: 1, maxlength: 150 },
   department: { type: String, trim: true, maxlength: 100 },
-  teamId: { type: Schema.Types.ObjectId, ref: 'tl_team', required: true },
+  teamId: [{ type: Schema.Types.ObjectId, ref: 'tl_team', required: true }],
   startDate: { type: Date },
   expectedEndDate: { type: Date },
   assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'tl_customer' }],

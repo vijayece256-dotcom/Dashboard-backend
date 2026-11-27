@@ -7,7 +7,7 @@ export interface ProjectInput {
   clientName?: string;
   projectOwner: string;
   department?: string;
-  teamId: Types.ObjectId;
+  teamId: Types.ObjectId[];
   startDate?: Date;
   expectedEndDate?: Date;
   assignedEmployees: Types.ObjectId[];
@@ -63,7 +63,22 @@ export function validateProjectInput(value: unknown): ProjectInput {
   const projectOwner = typeof body.projectOwner === 'string' ? body.projectOwner.trim() : '';
   if (!projectOwner) errors.projectOwner = 'projectOwner is required and must be a non-empty string.';
   else if (projectOwner.length > 150) errors.projectOwner = 'projectOwner must not exceed 150 characters.';
-  const teamId = requiredObjectId(body.teamId, 'teamId', errors);
+  const teamIds: Types.ObjectId[] = [];
+  if (!Array.isArray(body.teamId) || body.teamId.length === 0) {
+    errors.teamId = 'teamId must be a non-empty array of team IDs.';
+  } else {
+    const seen = new Set<string>();
+    body.teamId.forEach((value, index) => {
+      const teamId = requiredObjectId(value, `teamId[${index}]`, errors);
+      if (!teamId) return;
+      const normalized = teamId.toHexString();
+      if (seen.has(normalized)) errors.teamId = 'teamId cannot contain duplicates.';
+      else {
+        seen.add(normalized);
+        teamIds.push(teamId);
+      }
+    });
+  }
   const clientName = optionalString(body, 'clientName', 150, errors);
   const department = optionalString(body, 'department', 100, errors);
   const description = optionalString(body, 'description', 5000, errors);
@@ -101,7 +116,7 @@ export function validateProjectInput(value: unknown): ProjectInput {
   if (startDate && expectedEndDate && expectedEndDate < startDate) {
     errors.expectedEndDate = 'expectedEndDate must be on or after startDate.';
   }
-  if (Object.keys(errors).length || !teamId) {
+  if (Object.keys(errors).length || teamIds.length === 0) {
     throw new HttpError(400, 'Validation failed', errors);
   }
 
@@ -110,7 +125,7 @@ export function validateProjectInput(value: unknown): ProjectInput {
     clientName,
     projectOwner,
     department,
-    teamId,
+    teamId: teamIds,
     startDate,
     expectedEndDate,
     assignedEmployees: employeeIds,

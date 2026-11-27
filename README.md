@@ -29,7 +29,7 @@ The OpenAPI/Swagger specification is in [`swagger.yaml`](swagger.yaml).
 
 ## Team API
 
-Team routes are under `/api/v1/team` and require an admin bearer access token. Team names are unique regardless of letter case.
+Team routes are under `/api/v1/team` and require an admin bearer access token. Team names are unique regardless of letter case. Teams include `projectId`, an array of generated project IDs linked to that team; project POST/PUT keeps these mappings in sync with `teamId`.
 
 - `POST /api/v1/team-designation` — create a team and its designation together with `{ "teamName": "Platform", "designationName": "Engineer" }`. Both records are created with `isActive: true`.
 
@@ -50,12 +50,12 @@ Designation routes require an admin bearer access token. Each designation belong
 
 ## Project API
 
-Project routes are under `/api/v1/project` and require an admin bearer access token. `projectOwner` is a required string. `teamId` is a MongoDB ID for an active team, and `assignedEmployees` is an optional array of active employee customer IDs. The server generates immutable IDs such as `PRJ-1001`; project names are unique without regard to case.
+Project routes are under `/api/v1/project` and require an admin bearer access token. `projectOwner` is a required string. `teamId` is a non-empty array of MongoDB IDs for active teams, and `assignedEmployees` is an optional array of active employee customer IDs. The server generates immutable IDs such as `PRJ-1001`; project names are unique without regard to case.
 
 - `POST /api/v1/project` — create a project.
 - `PUT /api/v1/project/:id` — edit a project using its MongoDB `_id`.
-- `GET /api/v1/project` — list the requested project fields; each result includes `team: { _id, teamName }`.
-- `GET /api/v1/project/:id` — retrieve a project by its MongoDB `_id`, including `team: { _id, teamName }`.
+- `GET /api/v1/project` — list the requested project fields; each result includes `team: [{ _id, teamName }]`.
+- `GET /api/v1/project/:id` — retrieve a project by its MongoDB `_id`, including `team: [{ _id, teamName }]`.
 - `DELETE /api/v1/project/:id` — permanently delete a project.
 
 ### Project comments

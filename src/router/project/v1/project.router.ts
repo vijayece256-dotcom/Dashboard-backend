@@ -24,10 +24,10 @@ function getChangedFields(before: Record<string, unknown>, after: Record<string,
 
 function withTeamObject<T extends { teamId: unknown }>(project: T) {
   const { teamId, ...projectFields } = project;
-  const team = teamId as { _id: unknown; teamName: string } | null;
+  const teams = (Array.isArray(teamId) ? teamId : teamId ? [teamId] : []) as { _id: unknown; teamName: string }[];
   return {
     ...projectFields,
-    team: team ? { _id: team._id, teamName: team.teamName } : null,
+    team: teams.map(({ _id, teamName }) => ({ _id, teamName })),
   };
 }
 
@@ -52,18 +52,30 @@ async function nextProjectId(): Promise<string> {
 }
 
 async function validateReferences(input: ProjectInput): Promise<void> {
-  const [team, employeeCount] = await Promise.all([
-    TeamModel.exists({ _id: input.teamId, isActive: true }),
+  const [activeTeamCount, employeeCount] = await Promise.all([
+    TeamModel.countDocuments({ _id: { $in: input.teamId }, isActive: true }),
     input.assignedEmployees.length
       ? CustomerModel.countDocuments({ _id: { $in: input.assignedEmployees }, isActive: true, userType: 'employee' })
       : Promise.resolve(0),
   ]);
   const errors: Record<string, string> = {};
-  if (!team) errors.teamId = 'teamId must reference an active team.';
+  if (activeTeamCount !== input.teamId.length) errors.teamId = 'Every teamId must reference an active team.';
   if (employeeCount !== input.assignedEmployees.length) {
     errors.assignedEmployees = 'Every assigned employee must reference an active employee account.';
   }
   if (Object.keys(errors).length) throw new HttpError(400, 'Invalid project references', errors);
+}
+
+async function syncProjectTeams(projectID: string, teamIds: unknown[], previousTeamIds: unknown = []): Promise<void> {
+  const currentIds = teamIds.map((id) => String(id));
+  const previousIds = Array.isArray(previousTeamIds) ? previousTeamIds : previousTeamIds ? [previousTeamIds] : [];
+  const removedIds = previousIds.map((id) => String(id)).filter((id) => !currentIds.includes(id));
+  await Promise.all([
+    removedIds.length
+      ? TeamModel.updateMany({ _id: { $in: removedIds } }, { $pull: { projectId: projectID } })
+      : Promise.resolve(),
+    TeamModel.updateMany({ _id: { $in: currentIds } }, { $addToSet: { projectId: projectID } }),
+  ]);
 }
 
 function validateProjectId(id: string): void {
@@ -75,6 +87,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const input = validateProjectInput(req.body);
     await validateReferences(input);
     const project = await ProjectModel.create({ ...input, projectID: await nextProjectId() });
+    await syncProjectTeams(project.projectID, input.teamId);
     const actor = res.locals.auth as { customerId: string; userType: 'admin' | 'employee' };
     await recordProjectActivity({
       projectId: project._id,
@@ -100,6 +113,7 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       runValidators: true,
     }).lean();
     if (!project) throw new HttpError(404, 'Project not found');
+    await syncProjectTeams(project.projectID, input.teamId, previousProject.teamId);
     const changedFields = getChangedFields(
       previousProject as unknown as Record<string, unknown>,
       project as unknown as Record<string, unknown>,

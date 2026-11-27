@@ -1195,9 +1195,13 @@ components:
           type: string
           maxLength: 100
         teamId:
-          type: string
-          pattern: '^[a-fA-F0-9]{24}$'
-          description: MongoDB _id of an active team.
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: MongoDB _ids of active teams.
+          items:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
         startDate:
           type: string
           format: date-time
@@ -1276,7 +1280,9 @@ components:
         projectOwner:
           type: string
         team:
-          $ref: '#/components/schemas/TeamReference'
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamReference'
         startDate:
           type: string
           format: date-time
@@ -1303,7 +1309,9 @@ components:
         department:
           type: string
         team:
-          $ref: '#/components/schemas/TeamReference'
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamReference'
         startDate:
           type: string
           format: date-time
@@ -1363,6 +1371,12 @@ components:
         - type: object
           required: [_id, createdAt, updatedAt]
           properties:
+            projectId:
+              type: array
+              readOnly: true
+              items:
+                type: string
+                example: PRJ-1001
             _id:
               type: string
               example: 665f2d4e3b30ca7bd064d912
