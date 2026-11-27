@@ -70,3 +70,7 @@ Comment routes accept a MongoDB project `_id` or generated project ID (for examp
 ### Project activity history
 
 Project creation, changes, deletion, and comment add/edit/delete actions are recorded in `tl_project_activity`. Project edits include the changed fields and their previous/new values. `GET /api/v1/project/:projectId/activities` returns this history newest first and requires an admin token. The path accepts the MongoDB project `_id` or generated `projectID`.
+
+## Board API
+
+- `GET /api/v1/board` — requires an admin or employee bearer token. Admins receive all active teams; employees receive their assigned active team. Response: `{ "boardList": [{ "_id": "...", "teamName": "..." }] }`.
