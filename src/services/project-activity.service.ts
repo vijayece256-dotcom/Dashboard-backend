@@ -1,27 +1,40 @@
 import { Types } from 'mongoose';
 import { UserType } from '../models/customer.model';
-import { ProjectActivityAction, ProjectActivityModel, ProjectFieldChange } from '../models/project-activity.model';
+import { ActivityType, ProjectActivityAction, ProjectActivityModel, ProjectFieldChange } from '../models/project-activity.model';
+import { LegacyProjectActivityModel } from '../models/legacy-project-activity.model';
 
 export interface ActivityActor {
   actorId: string;
   actorRole: UserType;
 }
 
-interface RecordProjectActivityInput extends ActivityActor {
-  projectId: Types.ObjectId;
-  projectID: string;
+export interface RecordActivityInput extends ActivityActor {
+  type: ActivityType;
+  projectId?: Types.ObjectId;
+  taskId?: Types.ObjectId;
   action: ProjectActivityAction;
   message: string;
   changedFields?: ProjectFieldChange[];
   commentText?: string;
+  legacyProjectID?: string;
 }
 
-export async function recordProjectActivity(input: RecordProjectActivityInput): Promise<void> {
-  await ProjectActivityModel.create({
-    ...input,
+export async function recordActivity(input: RecordActivityInput): Promise<void> {
+  const { legacyProjectID, ...activity } = input;
+  const record = {
+    ...activity,
     actorId: new Types.ObjectId(input.actorId),
     changedFields: input.changedFields ?? [],
-  });
+  };
+  await Promise.all([
+    ProjectActivityModel.create(record),
+    LegacyProjectActivityModel.create({ ...record, ...(legacyProjectID ? { projectID: legacyProjectID } : {}) }),
+  ]);
+}
+
+export async function recordProjectActivity(input: Omit<RecordActivityInput, 'type' | 'legacyProjectID'> & { projectID?: string }): Promise<void> {
+  const { projectID, ...activity } = input;
+  await recordActivity({ ...activity, type: 'project', legacyProjectID: projectID });
 }
 
 export function activityRoleLabel(actorRole: UserType): string {

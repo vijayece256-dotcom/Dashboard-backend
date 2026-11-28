@@ -14,6 +14,7 @@ import projectActivityRouter from './project/v1/activity.router';
 import featureRouter from './feature/v1/feature.router';
 import boardRouter from './board/v1/board.router';
 import taskRouter from './task/v1/task.router';
+import taskCommentsRouter from './task/v1/comments.router';
 import { authenticate } from '../middlewares/authenticate';
 import { requireAdmin } from '../middlewares/require-admin';
 import { requireRoles } from '../middlewares/require-roles';
@@ -36,10 +37,12 @@ router.use('/v1/team-designation', authenticate, requireAdmin, teamDesignationCr
 router.use('/v1/team/:teamId/designation', authenticate, requireAdmin, teamDesignationRouter);
 router.use('/v1/team', authenticate, requireAdmin, teamRouter);
 router.use('/v1/project/:projectId/comments', authenticate, requireRoles('admin', 'employee'), projectCommentsRouter);
-router.use('/v1/project/:projectId/activities', authenticate, requireAdmin, projectActivityRouter);
+router.use('/v1/activity-history', authenticate, requireAdmin, projectActivityRouter);
+router.use('/v1/project', authenticate, requireAdmin, projectActivityRouter);
 router.use('/v1/project', authenticate, requireAdmin, projectRouter);
 router.use('/v1/feature', authenticate, requireAdmin, featureRouter);
 router.use('/v1/board', authenticate, requireRoles('admin', 'employee'), boardRouter);
+router.use('/v1/task/:taskId/comments', authenticate, requireRoles('admin', 'employee'), taskCommentsRouter);
 router.use('/v1/task', authenticate, requireRoles('admin', 'employee'), taskRouter);
 
 export default router;

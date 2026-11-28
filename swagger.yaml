@@ -1243,8 +1243,8 @@ paths:
           type: string
     get:
       tags: [Project Activity]
-      summary: List project activity history
-      description: Admin access only. Includes project create, edit, delete, and comment add, edit, and delete events.
+      summary: Legacy project activity history
+      description: Backward-compatible endpoint. Admin access only; returns project activity in the legacy response format.
       security:
         - bearerAuth: []
       responses:
@@ -1255,13 +1255,56 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProjectActivity'
+                  $ref: '#/components/schemas/ActivityHistoryItem'
         '401':
           description: Access token is missing, invalid, expired, or revoked.
         '403':
           description: Admin access is required.
         '404':
           description: Project not found.
+  /api/v1/activity-history:
+    parameters:
+      - name: activityType
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [project, task]
+      - name: projectId
+        in: query
+        description: Required only when activityType is project. Must be a MongoDB ObjectId.
+        schema: { type: string }
+      - name: taskId
+        in: query
+        description: Required only when activityType is task. Must be a MongoDB ObjectId.
+        schema: { type: string }
+    get:
+      tags: [Project Activity]
+      summary: List project or task activity history
+      description: Admin access only. Supply activityType=project with projectId, or activityType=task with taskId. Do not supply both IDs.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Activity history sorted newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [activityHistory]
+                properties:
+                  activityHistory:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivityHistoryItem'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '400':
+          description: activityType and exactly one matching ID are required.
+        '404':
+          description: Project or task not found.
 components:
   securitySchemes:
     bearerAuth:
@@ -1285,24 +1328,27 @@ components:
         updatedAt:
           type: string
           format: date-time
-    ProjectActivity:
+    ActivityHistoryItem:
       type: object
-      required: [_id, projectId, projectID, actorRole, action, message, changedFields, actorDetails, createdAt]
+      required: [_id, type, actorRole, action, message, changedFields, actorDetails, createdAt]
       properties:
         _id:
           type: string
+        type:
+          type: string
+          enum: [project, task]
         projectId:
           type: string
-          description: MongoDB _id of the project.
-        projectID:
+          description: MongoDB _id of the project; present for project activity.
+        taskId:
           type: string
-          example: PRJ-1001
+          description: MongoDB _id of the task; present for task activity.
         actorRole:
           type: string
           enum: [admin, employee]
         action:
           type: string
-          enum: [PROJECT_CREATED, PROJECT_UPDATED, PROJECT_DELETED, COMMENT_ADDED, COMMENT_UPDATED, COMMENT_DELETED]
+          enum: [PROJECT_CREATED, PROJECT_UPDATED, PROJECT_DELETED, COMMENT_ADDED, COMMENT_UPDATED, COMMENT_DELETED, TASK_CREATED, TASK_UPDATED, TASK_DELETED, TASK_COMMENT_ADDED, TASK_COMMENT_UPDATED, TASK_COMMENT_DELETED]
         message:
           type: string
         changedFields:
@@ -1315,9 +1361,13 @@ components:
           type: object
           nullable: true
           properties:
-            actorId:
+            _id:
               type: string
-            actorName:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
               type: string
             role:
               type: string

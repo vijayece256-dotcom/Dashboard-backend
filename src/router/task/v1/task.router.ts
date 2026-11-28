@@ -7,6 +7,7 @@ import { ProjectModel } from '../../../models/project.model';
 import { Task, TaskModel } from '../../../models/task.model';
 import { TaskTicketCounterModel } from '../../../models/task-ticket-counter.model';
 import { TeamModel } from '../../../models/team.model';
+import { activityRoleLabel, recordActivity, toActivityValue } from '../../../services/project-activity.service';
 import { TaskInput, validateTaskInput } from '../../../validations/task.validation';
 
 const router = Router();
@@ -69,6 +70,17 @@ async function employeeTaskFilter(customerId: string, allTasks: boolean): Promis
 }
 async function getAllTasks() {
   return TaskModel.find().sort({ createdAt: -1, _id: -1 });
+}
+
+const trackedTaskFields = ['title', 'description', 'projectId', 'teamId', 'priority', 'dueDate', 'employeeId', 'status'] as const;
+function taskChanges(before: Record<string, unknown>, after: Record<string, unknown>) {
+  return trackedTaskFields.flatMap((field) => {
+    const previousValue = toActivityValue(before[field]);
+    const newValue = toActivityValue(after[field]);
+    return JSON.stringify(previousValue) === JSON.stringify(newValue)
+      ? []
+      : [{ field, previousValue, newValue }];
+  });
 }
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -183,7 +195,15 @@ router.post('/', requireAdmin, async (req: Request, res: Response, next: NextFun
     const team = await resolveTaskTeam(input, req.query.boardId);
     const taskTicketId = await nextTaskTicketId(team.teamName);
     const auth = res.locals.auth as { customerId: string };
-    await TaskModel.create({ ...input, taskTicketId, teamId: team._id, reporterId: new Types.ObjectId(auth.customerId) });
+    const task = await TaskModel.create({ ...input, taskTicketId, teamId: team._id, reporterId: new Types.ObjectId(auth.customerId) });
+    await recordActivity({
+      type: 'task',
+      taskId: task._id,
+      actorId: auth.customerId,
+      actorRole: (res.locals.auth as { userType: 'admin' | 'employee' }).userType,
+      action: 'TASK_CREATED',
+      message: `${activityRoleLabel((res.locals.auth as { userType: 'admin' | 'employee' }).userType)} created task ${task.taskTicketId}`,
+    });
     res.status(201).json({ taskList: await getAllTasks() });
   } catch (error) { next(error); }
 });
@@ -226,6 +246,19 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response, next: NextF
       runValidators: true,
     });
     if (!task) throw new HttpError(404, 'Task not found');
+    const changedFields = taskChanges(existingTask as unknown as Record<string, unknown>, task.toObject() as unknown as Record<string, unknown>);
+    if (changedFields.length) {
+      const auth = res.locals.auth as { customerId: string; userType: 'admin' | 'employee' };
+      await recordActivity({
+        type: 'task',
+        taskId: task._id,
+        actorId: auth.customerId,
+        actorRole: auth.userType,
+        action: 'TASK_UPDATED',
+        message: `${activityRoleLabel(auth.userType)} updated task ${task.taskTicketId}: ${changedFields.map(({ field }) => field).join(', ')}`,
+        changedFields,
+      });
+    }
     res.status(200).json({ taskList: await getAllTasks() });
   } catch (error) { next(error); }
 });
@@ -236,6 +269,15 @@ router.delete('/:id', requireAdmin, async (req: Request, res: Response, next: Ne
     if (!isValidObjectId(taskId)) throw new HttpError(400, 'Invalid task ID');
     const task = await TaskModel.findByIdAndDelete(taskId).lean();
     if (!task) throw new HttpError(404, 'Task not found');
+    const auth = res.locals.auth as { customerId: string; userType: 'admin' | 'employee' };
+    await recordActivity({
+      type: 'task',
+      taskId: task._id,
+      actorId: auth.customerId,
+      actorRole: auth.userType,
+      action: 'TASK_DELETED',
+      message: `${activityRoleLabel(auth.userType)} deleted task ${task.taskTicketId}`,
+    });
     res.status(200).json({
       message: 'Task deleted successfully',
       taskTicketId: task.taskTicketId,

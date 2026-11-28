@@ -14,6 +14,8 @@ import { FeatureModel } from './src/models/feature.model';
 import { CustomerModel } from './src/models/customer.model';
 import { TaskModel } from './src/models/task.model';
 import { TaskTicketCounterModel } from './src/models/task-ticket-counter.model';
+import { TaskCommentModel } from './src/models/task-comment.model';
+import { LegacyProjectActivityModel } from './src/models/legacy-project-activity.model';
 
 const app: Application = express();
 const PORT = Number(process.env.PORT ?? 8000);
@@ -33,8 +35,78 @@ async function start(): Promise<void> {
   await mongoConfig(mongoUri);
   await migrateLegacyFeatureFields();
   await migrateOptionalEmployeeIndexes();
-  await Promise.all([TeamModel.init(), DesignationModel.init(), ProjectModel.init(), ProjectActivityModel.init(), FeatureModel.init(), CustomerModel.init(), TaskModel.init(), TaskTicketCounterModel.init()]);
+  await migrateLegacyActivityRecords();
+  await Promise.all([TeamModel.init(), DesignationModel.init(), ProjectModel.init(), ProjectActivityModel.init(), LegacyProjectActivityModel.init(), FeatureModel.init(), CustomerModel.init(), TaskModel.init(), TaskTicketCounterModel.init(), TaskCommentModel.init()]);
   app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+}
+
+async function migrateLegacyActivityRecords(): Promise<void> {
+  const database = ProjectActivityModel.db.db;
+  if (database) {
+    const collections = await database.listCollections({}, { nameOnly: true }).toArray();
+    const hasLegacyCollection = collections.some((collection) => collection.name === 'tl_project_activity');
+    const hasHistoryCollection = collections.some((collection) => collection.name === 'tl_activity_history');
+
+    if (hasLegacyCollection && !hasHistoryCollection) {
+      await database.collection('tl_project_activity').rename('tl_activity_history');
+    } else if (hasLegacyCollection && hasHistoryCollection) {
+      await database.collection('tl_project_activity').aggregate([
+        { $set: { type: { $ifNull: ['$type', 'project'] } } },
+        { $unset: 'projectID' },
+        {
+          $merge: {
+            into: 'tl_activity_history',
+            on: '_id',
+            whenMatched: 'keepExisting',
+            whenNotMatched: 'insert',
+          },
+        },
+      ]).toArray();
+      await database.collection('tl_project_activity').drop();
+    }
+  }
+
+  const indexes = await ProjectActivityModel.collection.indexes().catch((error: unknown) => {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 26) return [];
+    throw error;
+  });
+  await ProjectActivityModel.collection.updateMany(
+    { type: { $exists: false }, projectId: { $exists: true } },
+    { $set: { type: 'project' } },
+  );
+  await ProjectActivityModel.collection.updateMany(
+    { projectID: { $exists: true } },
+    { $unset: { projectID: '' } },
+  );
+  for (const index of indexes.filter((candidate) => candidate.key?.projectID === 1)) {
+    if (index.name) await ProjectActivityModel.collection.dropIndex(index.name);
+  }
+
+  if (database && await ProjectActivityModel.countDocuments({ type: 'project' }) > 0) {
+    await ProjectActivityModel.collection.aggregate([
+      { $match: { type: 'project', projectId: { $exists: true } } },
+      { $lookup: { from: 'tl_project', localField: 'projectId', foreignField: '_id', as: 'project' } },
+      {
+        $set: {
+          projectID: {
+            $ifNull: [
+              { $arrayElemAt: ['$project.projectID', 0] },
+              { $toString: '$projectId' },
+            ],
+          },
+        },
+      },
+      { $unset: 'project' },
+      {
+        $merge: {
+          into: 'tl_project_activity',
+          on: '_id',
+          whenMatched: 'keepExisting',
+          whenNotMatched: 'insert',
+        },
+      },
+    ]).toArray();
+  }
 }
 
 async function migrateOptionalEmployeeIndexes(): Promise<void> {

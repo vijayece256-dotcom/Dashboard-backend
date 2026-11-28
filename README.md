@@ -67,9 +67,11 @@ Comment routes accept a MongoDB project `_id` or generated project ID (for examp
 - `PUT /api/v1/project/:projectId/comments/:commentId` — edit a comment.
 - `DELETE /api/v1/project/:projectId/comments/:commentId` — delete a comment.
 
-### Project activity history
+### Activity history
 
-Project creation, changes, deletion, and comment add/edit/delete actions are recorded in `tl_project_activity`. Project edits include the changed fields and their previous/new values. `GET /api/v1/project/:projectId/activities` returns this history newest first and requires an admin token. The path accepts the MongoDB project `_id` or generated `projectID`.
+Project and task creation, changes, deletion, and comment add/edit/delete actions are recorded in `tl_activity_history` and mirrored to `tl_project_activity`. Updates include changed fields and their previous/new values. `GET /api/v1/activity-history` requires an admin token and returns history newest first. Use `?activityType=project&projectId=<MongoDB ObjectId>` for project history or `?activityType=task&taskId=<MongoDB ObjectId>` for task history. Exactly one matching ID is required. `type` in each history record identifies the target kind; `projectId` and `taskId` are MongoDB ObjectIds. The legacy project history API at `/api/v1/project/:projectId/activities` remains available.
+
+Task comments can be added, listed, edited, and deleted at `/api/v1/task/:taskId/comments` (the path accepts a task MongoDB `_id` or task ticket ID). Only the author can edit or delete a comment.
 
 ## Board API
 
