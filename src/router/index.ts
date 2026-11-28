@@ -13,6 +13,7 @@ import projectCommentsRouter from './project/v1/comments.router';
 import projectActivityRouter from './project/v1/activity.router';
 import featureRouter from './feature/v1/feature.router';
 import boardRouter from './board/v1/board.router';
+import taskRouter from './task/v1/task.router';
 import { authenticate } from '../middlewares/authenticate';
 import { requireAdmin } from '../middlewares/require-admin';
 import { requireRoles } from '../middlewares/require-roles';
@@ -39,5 +40,6 @@ router.use('/v1/project/:projectId/activities', authenticate, requireAdmin, proj
 router.use('/v1/project', authenticate, requireAdmin, projectRouter);
 router.use('/v1/feature', authenticate, requireAdmin, featureRouter);
 router.use('/v1/board', authenticate, requireRoles('admin', 'employee'), boardRouter);
+router.use('/v1/task', authenticate, requireRoles('admin', 'employee'), taskRouter);
 
 export default router;

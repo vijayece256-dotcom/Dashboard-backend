@@ -12,6 +12,7 @@ tags:
   - name: Health
   - name: Authentication
   - name: Employee
+  - name: Task
   - name: Board
   - name: Team
   - name: Designation
@@ -399,6 +400,168 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+  /api/v1/task:
+    get:
+      tags: [Task]
+      summary: List tasks grouped by team
+      description: Admins receive all tasks. Employees can set allTasks=true for project tasks or false to see tasks assigned directly to them.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: allTasks
+          in: query
+          required: false
+          description: Employee filter only. true returns tasks for projects assigned to the employee; false or omitted returns tasks assigned directly to the employee.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Task list grouped under each team name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskBoardResponse'
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin or employee access is required.
+    post:
+      tags: [Task]
+      summary: Create a task
+      description: Admin access is required. Returns the full task list after creation.
+      parameters:
+        - name: boardId
+          in: query
+          required: true
+          description: Team ID selected in the board; used as the task teamId.
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskInput'
+      responses:
+        '201':
+          description: Task created and task list returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+        '400':
+          description: Task fields or references are invalid.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+  /api/v1/task/{id}:
+    get:
+      tags: [Task]
+      summary: Retrieve a task by ID
+      description: Admins can retrieve any task. Employees can retrieve tasks assigned to them or belonging to projects assigned to them. The id may be the MongoDB _id or generated taskTicketId.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BSOF-1001
+      responses:
+        '200':
+          description: Task details returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskBoardItem'
+        '400':
+          description: Invalid task ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin or employee access is required.
+        '404':
+          description: Task not found.
+    put:
+      tags: [Task]
+      summary: Update a task
+      description: Admin access is required. Returns the full task list after update.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskInput'
+      responses:
+        '200':
+          description: Task updated and task list returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+        '400':
+          description: Task ID, fields, or references are invalid.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Task not found.
+    delete:
+      tags: [Task]
+      summary: Delete a task
+      description: Admin access is required. Deletes by MongoDB task _id and returns the updated task list.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '200':
+          description: Task deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, taskTicketId, taskList]
+                properties:
+                  message:
+                    type: string
+                    example: Task deleted successfully
+                  taskTicketId:
+                    type: string
+                    example: BSOF-1001
+                  taskList:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+        '400':
+          description: Invalid task ID.
+        '401':
+          description: Access token is missing, invalid, expired, or revoked.
+        '403':
+          description: Admin access is required.
+        '404':
+          description: Task not found.
   /api/v1/board:
     get:
       tags: [Board]
@@ -1376,6 +1539,133 @@ components:
           type: string
         isActive:
           type: boolean
+    TaskInput:
+      type: object
+      required: [title, description, projectId, priority, dueDate]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        projectId:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        teamId:
+          type: string
+          description: Optional for PUT; POST uses the boardId query parameter.
+          pattern: '^[a-fA-F0-9]{24}$'
+        priority:
+          type: string
+          enum: [High, Medium, Low]
+        dueDate:
+          type: string
+          pattern: '^(0[1-9]|[12]\d|3[01])-(0[1-9]|1[0-2])-\d{4}$'
+          example: 28-11-1996
+          description: Calendar date in DD-MM-YYYY format, with no time component.
+        status:
+          type: string
+          enum: [New, InProgress, Completed, OnHold]
+          default: New
+          description: Defaults to New. employeeId is required for InProgress, Completed, and OnHold.
+        employeeId:
+          type: string
+          description: Optional when status is New; required for InProgress, Completed, and OnHold.
+          pattern: '^[a-fA-F0-9]{24}$'
+    Task:
+      allOf:
+        - $ref: '#/components/schemas/TaskInput'
+        - type: object
+          required: [_id, taskTicketId, teamId, reporterId, createdAt, updatedAt]
+          properties:
+            taskTicketId:
+              type: string
+              readOnly: true
+              pattern: '^B[A-Z]+-\d+$'
+              example: BSOF-1001
+            teamId:
+              type: string
+              readOnly: true
+              pattern: '^[a-fA-F0-9]{24}$'
+            reporterId:
+              type: string
+              readOnly: true
+              pattern: '^[a-fA-F0-9]{24}$'
+            _id:
+              type: string
+              pattern: '^[a-fA-F0-9]{24}$'
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    TaskBoardResponse:
+      type: object
+      description: Each property is a camelCase team name whose value is that team's task list.
+      additionalProperties:
+        type: array
+        items:
+          $ref: '#/components/schemas/TaskBoardItem'
+    TaskBoardItem:
+      type: object
+      required: [_id, taskId, teamId, title, description, priority, dueDate, reporterDetails, employee]
+      properties:
+        _id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        taskId:
+          type: string
+          description: The taskTicketId value.
+          pattern: '^B[A-Z]+-\d+$'
+        teamId:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        title:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [High, Medium, Low]
+        dueDate:
+          type: string
+          format: date-time
+        reporterDetails:
+          type: object
+          nullable: true
+          properties:
+            _id:
+              type: string
+              pattern: '^[a-fA-F0-9]{24}$'
+            firstname:
+              type: string
+            lastname:
+              type: string
+            emailaddress:
+              type: string
+              format: email
+        employee:
+          type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
+              type: string
+              format: email
+    TaskListResponse:
+      type: object
+      required: [taskList]
+      properties:
+        taskList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
     TeamReference:
       type: object
       required: [_id, teamName]

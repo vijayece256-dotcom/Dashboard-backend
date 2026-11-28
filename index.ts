@@ -12,6 +12,8 @@ import { ProjectModel } from './src/models/project.model';
 import { ProjectActivityModel } from './src/models/project-activity.model';
 import { FeatureModel } from './src/models/feature.model';
 import { CustomerModel } from './src/models/customer.model';
+import { TaskModel } from './src/models/task.model';
+import { TaskTicketCounterModel } from './src/models/task-ticket-counter.model';
 
 const app: Application = express();
 const PORT = Number(process.env.PORT ?? 8000);
@@ -31,7 +33,7 @@ async function start(): Promise<void> {
   await mongoConfig(mongoUri);
   await migrateLegacyFeatureFields();
   await migrateOptionalEmployeeIndexes();
-  await Promise.all([TeamModel.init(), DesignationModel.init(), ProjectModel.init(), ProjectActivityModel.init(), FeatureModel.init(), CustomerModel.init()]);
+  await Promise.all([TeamModel.init(), DesignationModel.init(), ProjectModel.init(), ProjectActivityModel.init(), FeatureModel.init(), CustomerModel.init(), TaskModel.init(), TaskTicketCounterModel.init()]);
   app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
 }
 
