@@ -1233,6 +1233,112 @@ paths:
           description: Admin or employee access is required.
         '404':
           description: Project or comment not found.
+  /api/v1/comments:
+    parameters:
+      - name: type
+        in: query
+        required: true
+        schema: { type: string, enum: [task, project] }
+      - name: taskId
+        in: query
+        description: Required when type is task; accepts a task MongoDB ID or ticket ID.
+        schema: { type: string }
+      - name: projectId
+        in: query
+        description: Required when type is project; accepts a MongoDB project ID or generated project ID.
+        schema: { type: string }
+      - name: commentId
+        in: query
+        description: Comment ID for PUT or DELETE when it is not supplied in the path.
+        schema: { type: string }
+    get:
+      tags: [Comments]
+      summary: List comments for a task or project
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Comments with author details and timestamps.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [comments]
+                properties:
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectComment'
+        '400': { description: type and its matching target ID are required. }
+    post:
+      tags: [Comments]
+      summary: Add a comment to a task or project
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCommentInput'
+      responses:
+        '201': { description: Comment created and activity recorded. }
+        '400': { description: Invalid target or comment body. }
+    put:
+      tags: [Comments]
+      summary: Edit a comment
+      description: Supply commentId in the path or query. Only the author can edit it.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCommentInput'
+      responses:
+        '200': { description: Comment updated and activity recorded. }
+        '404': { description: Comment not found or not owned by the current user. }
+  /api/v1/comments/{commentId}:
+    parameters:
+      - name: commentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: type
+        in: query
+        required: true
+        schema: { type: string, enum: [task, project] }
+      - name: taskId
+        in: query
+        schema: { type: string }
+      - name: projectId
+        in: query
+        schema: { type: string }
+    put:
+      tags: [Comments]
+      summary: Edit a comment
+      description: Only the comment author can edit it.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCommentInput'
+      responses:
+        '200': { description: Comment updated and activity recorded. }
+        '404': { description: Comment not found or not owned by the current user. }
+    delete:
+      tags: [Comments]
+      summary: Delete a comment
+      description: Only the comment author can delete it.
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { description: Comment deleted and activity recorded. }
+        '404': { description: Comment not found or not owned by the current user. }
   /api/v1/project/{projectId}/activities:
     parameters:
       - name: projectId
@@ -1244,7 +1350,7 @@ paths:
     get:
       tags: [Project Activity]
       summary: Legacy project activity history
-      description: Backward-compatible endpoint. Admin access only; returns project activity in the legacy response format.
+      description: Backward-compatible endpoint. Admins can access all project history. Employees can access history only for projects assigned to them.
       security:
         - bearerAuth: []
       responses:
@@ -1259,7 +1365,7 @@ paths:
         '401':
           description: Access token is missing, invalid, expired, or revoked.
         '403':
-          description: Admin access is required.
+          description: Admin or employee access is required; employees must be assigned to the project.
         '404':
           description: Project not found.
   /api/v1/activity-history:
@@ -1281,7 +1387,7 @@ paths:
     get:
       tags: [Project Activity]
       summary: List project or task activity history
-      description: Admin access only. Supply activityType=project with projectId, or activityType=task with taskId. Do not supply both IDs.
+      description: Admins can access all history. Employees can access history only for assigned projects; task access is checked through the task's project. Supply activityType=project with projectId, or activityType=task with taskId. Do not supply both IDs.
       security:
         - bearerAuth: []
       responses:
@@ -1300,7 +1406,7 @@ paths:
         '401':
           description: Access token is missing, invalid, expired, or revoked.
         '403':
-          description: Admin access is required.
+          description: Admin or employee access is required; employees must be assigned to the target project.
         '400':
           description: activityType and exactly one matching ID are required.
         '404':
